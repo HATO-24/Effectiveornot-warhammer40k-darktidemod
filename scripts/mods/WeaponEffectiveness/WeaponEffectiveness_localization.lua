@@ -308,6 +308,116 @@ return {
 		["zh-cn"] = "当前动作",
 		["zh-tw"] = "當前動作",
 	},
+	zone_head = {
+		en = "Head",
+		["zh-cn"] = "头部",
+		["zh-tw"] = "頭部",
+	},
+	zone_torso = {
+		en = "Torso",
+		["zh-cn"] = "躯干",
+		["zh-tw"] = "軀幹",
+	},
+	zone_center_mass = {
+		en = "Center Mass",
+		["zh-cn"] = "身体中央",
+		["zh-tw"] = "身體中央",
+	},
+	zone_upper_left_arm = {
+		en = "Left Arm (Upper)",
+		["zh-cn"] = "左臂（上）",
+		["zh-tw"] = "左臂（上）",
+	},
+	zone_lower_left_arm = {
+		en = "Left Arm (Lower)",
+		["zh-cn"] = "左臂（下）",
+		["zh-tw"] = "左臂（下）",
+	},
+	zone_upper_right_arm = {
+		en = "Right Arm (Upper)",
+		["zh-cn"] = "右臂（上）",
+		["zh-tw"] = "右臂（上）",
+	},
+	zone_lower_right_arm = {
+		en = "Right Arm (Lower)",
+		["zh-cn"] = "右臂（下）",
+		["zh-tw"] = "右臂（下）",
+	},
+	zone_upper_left_leg = {
+		en = "Left Leg (Upper)",
+		["zh-cn"] = "左腿（上）",
+		["zh-tw"] = "左腿（上）",
+	},
+	zone_lower_left_leg = {
+		en = "Left Leg (Lower)",
+		["zh-cn"] = "左腿（下）",
+		["zh-tw"] = "左腿（下）",
+	},
+	zone_upper_right_leg = {
+		en = "Right Leg (Upper)",
+		["zh-cn"] = "右腿（上）",
+		["zh-tw"] = "右腿（上）",
+	},
+	zone_lower_right_leg = {
+		en = "Right Leg (Lower)",
+		["zh-cn"] = "右腿（下）",
+		["zh-tw"] = "右腿（下）",
+	},
+	zone_shield = {
+		en = "Shield",
+		["zh-cn"] = "盾牌",
+		["zh-tw"] = "盾牌",
+	},
+	zone_captain_void_shield = {
+		en = "Void Shield",
+		["zh-cn"] = "虚空护盾",
+		["zh-tw"] = "虛空護盾",
+	},
+	zone_corruptor_armor = {
+		en = "Corruptor Armor",
+		["zh-cn"] = "腐化装甲",
+		["zh-tw"] = "腐化裝甲",
+	},
+	zone_backpack = {
+		en = "Backpack",
+		["zh-cn"] = "背包",
+		["zh-tw"] = "背包",
+	},
+	zone_tentacle = {
+		en = "Tentacle",
+		["zh-cn"] = "触手",
+		["zh-tw"] = "觸手",
+	},
+	zone_right_shoulderguard = {
+		en = "Shoulderguard",
+		["zh-cn"] = "右肩甲",
+		["zh-tw"] = "右肩甲",
+	},
+	zone_weakspot = {
+		en = "Weakspot",
+		["zh-cn"] = "弱点",
+		["zh-tw"] = "弱點",
+	},
+	zone_afro = {
+		en = "Afro",
+		["zh-cn"] = "爆炸发型",
+		["zh-tw"] = "爆炸髮型",
+	},
+	zone_tongue = {
+		en = "Tongue",
+		["zh-cn"] = "舌头",
+		["zh-tw"] = "舌頭",
+	},
+	zone_upper_tail = {
+		en = "Tail (Upper)",
+		["zh-cn"] = "尾巴（上）",
+		["zh-tw"] = "尾巴（上）",
+	},
+	zone_lower_tail = {
+		en = "Tail (Lower)",
+		["zh-cn"] = "尾巴（下）",
+		["zh-tw"] = "尾巴（下）",
+	},
 	special_active_marker = {
 		en = "[SPECIAL ON]",
 		["zh-cn"] = "[特殊模式]",

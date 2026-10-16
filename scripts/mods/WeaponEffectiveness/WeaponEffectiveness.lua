@@ -281,38 +281,6 @@ local function special_active_of(player_unit, action_component)
 	return nil, slot, slot_component
 end
 
--- ----------------------------------------------------------------- verdict --
-
-local function verdict_for(entry, armor_type, is_ranged, special_active, bands, band)
-	if not entry then
-		return nil
-	end
-
-	local profile, variant = weapon_profiles.active_profile(entry, special_active)
-
-	if type(profile) ~= "table" then
-		return {
-			verdict = armor.VERDICT.UNKNOWN,
-			profile_name = nil,
-			variant = variant,
-			action_name = entry.action_name,
-		}
-	end
-
-	local _, max_modifier, source_key, used_band = armor.modifier(profile, armor_type, is_ranged, band)
-
-	return {
-		verdict = armor.classify(max_modifier, bands),
-		max = max_modifier,
-		profile_name = profile.name,
-		profile = profile,
-		variant = variant,
-		source_key = source_key,
-		armor_band = used_band,
-		action_name = entry.action_name,
-	}
-end
-
 -- ----------------------------------------------------------------- refresh --
 
 local function refresh()
@@ -406,39 +374,6 @@ local function refresh()
 	state.has_special = resolved ~= nil and resolved.has_special == true
 	state.special_active = special_active == true
 	state.weapon_name = weapon_template and weapon_template.display_name
-
-	-- An attack that is neither light nor heavy but carries its own damage profile:
-	-- a braced/aimed mode, a special attack, a bash. Shown as its own row while it
-	-- is running -- the "当前动作" row from the basic build.
-	local current_entry = nil
-
-	if resolved and type(current_action_name) == "string" and current_action_name ~= "none" then
-		local on_chain = (resolved.light and resolved.light.action_name == current_action_name)
-			or (resolved.heavy and resolved.heavy.action_name == current_action_name)
-
-		if not on_chain then
-			local candidate = weapon_profiles.entry_for_action(weapon_template, current_action_name)
-
-			-- Skip when the profile is one the light/heavy rows already show, so
-			-- this row can never be a duplicate.
-			if candidate and candidate.profile then
-				local same_as_light = resolved.light and resolved.light.profile == candidate.profile
-				local same_as_heavy = resolved.heavy and resolved.heavy.profile == candidate.profile
-
-				if not same_as_light and not same_as_heavy then
-					current_entry = candidate
-				end
-			end
-		end
-	end
-
-	-- The action actually running is the strongest evidence of what the player is
-	-- doing, so it takes the emphasis marker away from the light/heavy guess.
-	if current_entry then
-		active_kind = "current"
-	end
-
-	state.active_kind = active_kind
 
 	local target_info = target_module.resolve(player_unit)
 
@@ -540,6 +475,57 @@ local function refresh()
 	-- of them.
 	local show_special_preview = state.has_special and not state.special_active
 
+	-- Each row answers "which body part should this attack hit", instead of the
+	-- old "what armour is under the crosshair" -- mapping the crosshair to a body
+	-- part never worked reliably on the live engine, while the breed's per-zone
+	-- armour table is data we know is right.
+	local function best_zone_line(entry, force_special, is_active)
+		if not entry then
+			return nil
+		end
+
+		local profile = weapon_profiles.active_profile(entry, force_special and true or state.special_active)
+
+		if type(profile) ~= "table" then
+			return nil
+		end
+
+		local best_zone, best_armor, best_max = armor.best_zone(profile, target_info.breed, is_ranged, is_ranged and ranged_band() or nil)
+
+		if type(best_max) ~= "number" then
+			return nil
+		end
+
+		-- Only annotate the body part when body parts actually differ: on a breed
+		-- where every part wears the same armour, "head" carries no information.
+		local zone_key = nil
+
+		if best_zone then
+			local zones = armor.zones_with_armor(target_info.breed)
+			local first_armor = zones[1] and zones[1].armor
+
+			for i = 2, #zones do
+				if zones[i].armor ~= first_armor then
+					zone_key = "zone_" .. best_zone
+
+					break
+				end
+			end
+		end
+
+		return {
+			verdict = armor.classify(best_max, bands),
+			max = best_max,
+			profile_name = profile.name,
+			variant = nil,
+			action_name = entry.action_name,
+			zone = best_zone,
+			zone_armor = best_armor,
+			zone_key = zone_key,
+			active = is_active and true or false,
+		}
+	end
+
 	for i = 1, #ATTACK_KINDS do
 		local kind = ATTACK_KINDS[i]
 
@@ -556,41 +542,16 @@ local function refresh()
 
 			local force_special = kind == "special"
 
-			local line = verdict_for(
+			local line = best_zone_line(
 				entry,
-				armor_type,
-				is_ranged,
-				force_special and true or state.special_active,
-				bands,
-				is_ranged and ranged_band() or nil
+				force_special,
+				(active_kind == kind) or (force_special and state.special_active and active_kind == nil)
 			)
 
 			if line then
 				line.kind = kind
-				line.active = (active_kind == kind)
-					or (force_special and state.special_active and active_kind == nil)
 				lines[#lines + 1] = line
 			end
-		end
-	end
-
-	-- The off-chain action gets its own row, marked active. This is the "当前动作"
-	-- row from the basic build: it appears only while such an action is running.
-	if current_entry then
-		local line = verdict_for(
-			current_entry,
-			armor_type,
-			is_ranged,
-			state.special_active,
-			bands,
-			is_ranged and ranged_band() or nil
-		)
-
-		if line then
-			line.kind = "current"
-			line.active = true
-
-			lines[#lines + 1] = line
 		end
 	end
 

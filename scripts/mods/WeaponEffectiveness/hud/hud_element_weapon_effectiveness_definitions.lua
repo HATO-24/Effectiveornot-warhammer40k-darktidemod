@@ -10,9 +10,7 @@ local settings_horizontal_alignment = Settings.horizontal_alignment
 
 -- Rows are label + value pairs so the attack name can stay neutral while the
 -- verdict carries its own colour, without relying on inline text markup.
--- `current` is the off-chain attack in progress (braced/aimed mode, special
--- attack, bash); it is only populated while such an action is running.
-local ROWS = { "armor", "light", "heavy", "special", "current" }
+local ROWS = { "armor", "light", "heavy", "special" }
 
 local font_type = mod:get("font_type") or "proxima_nova_bold"
 local font_size = mod:get("font_size") or 20

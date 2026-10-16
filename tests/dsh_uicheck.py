@@ -72,6 +72,15 @@ for key in sorted(wanted):
     if key not in loc_keys:
         problems.append("UI wants localisation key %r but it is not defined" % key)
 
+# Body-part annotations: every zone the best-zone pivot can name needs a label.
+zone_order = re.search(r"ZONE_ORDER\s*=\s*\{(.*?)\n\}", text["armor"], re.S)
+if zone_order:
+    for zone in re.findall(r'"([a-z_]+)"', zone_order.group(1)):
+        if ("zone_" + zone) not in loc_keys:
+            problems.append("zone %r is in ZONE_ORDER but has no zone_%s label" % (zone, zone))
+else:
+    problems.append("could not find ZONE_ORDER in armor.lua")
+
 # --- 2/3. the right lookup API -------------------------------------------------
 if "mod.localize" not in text["hud"]:
     problems.append("HUD element never calls mod.localize: mod keys would render as unlocalized")

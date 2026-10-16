@@ -22,7 +22,6 @@ local ATTACK_LOC = {
 	light = "attack_light",
 	heavy = "attack_heavy",
 	special = "attack_special",
-	current = "attack_current",
 }
 
 local ARMOR_ROW = "armor"
@@ -190,6 +189,16 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 
 			if show_multiplier and type(line.max) == "number" then
 				value = string.format("%s  x%.2f", value, line.max)
+			end
+
+			-- "which body part this attack wants" annotation, present only when the
+			-- breed's body parts actually differ in armour.
+			if line.zone_key then
+				local zone_name = localize(line.zone_key)
+
+				if zone_name ~= "" then
+					value = value .. "  · " .. zone_name
+				end
 			end
 
 			set_row(self, row, label, value, mod.verdict_color(line.verdict), true)

@@ -379,4 +379,117 @@ function armor.armor_type_for_hitzone(breed, hit_zone_name)
 	return breed.armor_type, false
 end
 
+-- ---------------------------------------------------------------- best zone --
+
+-- Display order for body parts (same order the EnemyStats browser uses). Ties in
+-- the best-zone search resolve towards the earlier entry, which puts the head
+-- first -- usually the answer the player wants.
+local ZONE_ORDER = {
+	"head",
+	"torso",
+	"center_mass",
+	"upper_left_arm",
+	"lower_left_arm",
+	"upper_right_arm",
+	"lower_right_arm",
+	"upper_left_leg",
+	"lower_left_leg",
+	"upper_right_leg",
+	"lower_right_leg",
+	"captain_void_shield",
+	"shield",
+	"corruptor_armor",
+	"backpack",
+	"tentacle",
+	"weakspot",
+	"right_shoulderguard",
+	"afro",
+	"tongue",
+	"upper_tail",
+	"lower_tail",
+}
+
+-- Every body part the breed has, in display order, with the armour it wears there.
+--
+-- This is the pivot away from resolving which body part the crosshair is on -- a
+-- mapping that kept failing on the real engine. The breed table is data we know is
+-- right (the game's own EnemyStats browser shows it), so the readout instead
+-- answers "which body part should each attack hit".
+function armor.zones_with_armor(breed)
+	local zones = {}
+
+	if type(breed) ~= "table" then
+		return zones
+	end
+
+	local override = breed.hitzone_armor_override
+	local known = {}
+
+	-- Every zone the breed's own hit_zones table names...
+	local hit_zones = breed.hit_zones
+
+	if type(hit_zones) == "table" then
+		for i = 1, #hit_zones do
+			local zone = hit_zones[i]
+
+			if type(zone) == "table" and type(zone.name) == "string" then
+				known[zone.name] = true
+			end
+		end
+	end
+
+	-- ...plus zones that carry an override even if the breed table does not list
+	-- them (a shield, a canister).
+	if type(override) == "table" then
+		for zone_name in pairs(override) do
+			if type(zone_name) == "string" then
+				known[zone_name] = true
+			end
+		end
+	end
+
+	for i = 1, #ZONE_ORDER do
+		local zone_name = ZONE_ORDER[i]
+
+		if known[zone_name] then
+			local armor_type = type(override) == "table" and override[zone_name] or breed.armor_type
+
+			zones[#zones + 1] = {
+				zone = zone_name,
+				armor = armor_type,
+			}
+		end
+	end
+
+	return zones
+end
+
+-- The body part this damage profile hits the hardest, by armour modifier.
+-- Returns zone_name|nil, armor_type, max_modifier. With no zones at all, zone_name
+-- is nil and the breed-wide armour is judged.
+function armor.best_zone(damage_profile, breed, is_ranged, band)
+	local zones = armor.zones_with_armor(breed)
+
+	if #zones == 0 then
+		local _, max_modifier = armor.modifier(damage_profile, breed and breed.armor_type, is_ranged, band)
+
+		return nil, breed and breed.armor_type, max_modifier
+	end
+
+	local best_zone, best_armor, best_max = nil, nil, nil
+
+	for i = 1, #zones do
+		local zone = zones[i]
+		local _, max_modifier = armor.modifier(damage_profile, zone.armor, is_ranged, band)
+
+		if type(max_modifier) == "number" and (best_max == nil or max_modifier > best_max) then
+			best_zone = zone.zone
+			best_armor = zone.armor
+			best_max = max_modifier
+		end
+	end
+
+	return best_zone, best_armor, best_max
+end
+
 return armor
