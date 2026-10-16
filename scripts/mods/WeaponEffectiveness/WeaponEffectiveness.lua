@@ -594,11 +594,12 @@ local function refresh()
 	-- of them.
 	local show_special_preview = state.has_special and not state.special_active
 
-	-- Each row answers "which body part should this attack hit", instead of the
-	-- old "what armour is under the crosshair" -- mapping the crosshair to a body
-	-- part never worked reliably on the live engine, while the breed's per-zone
-	-- armour table is data we know is right.
-	local function best_zone_line(entry, force_special, is_active)
+	-- Each row lists every body part the player can aim at, with that part's
+	-- effective multiplier, instead of collapsing to a single "best" one: which
+	-- part you actually hit is your call, so both numbers are the honest answer.
+	-- The row's colour still comes from the best part, which is the actionable
+	-- question ("is there anywhere this works?").
+	local function attack_line(entry, force_special, is_active)
 		if not entry then
 			return nil
 		end
@@ -612,10 +613,9 @@ local function refresh()
 		local band = is_ranged and ranged_band() or nil
 		local live = state.live_stats
 
-		-- Rank the parts by the number the player will actually see: the armour
-		-- modifier with rending applied, times the weakspot multiplier where the
-		-- part is a weakspot. That can pick a different part than the raw table.
-		local best = armor.best_zone_by(target_info.breed, function (zone)
+		-- Scored parts: every aimable part with its effective multiplier, plus the
+		-- best of them for the row colour.
+		local scored, best = armor.scored_parts(target_info.breed, function (zone)
 			local _, base_max = armor.modifier(profile, zone.armor, is_ranged, band)
 
 			return live_stats.effective_modifier(base_max, live, zone.weakspot ~= nil), base_max
@@ -624,39 +624,55 @@ local function refresh()
 		-- A breed with no zone data at all is judged on its breed-wide armour.
 		if not best then
 			local _, base_max = armor.modifier(profile, target_info.breed and target_info.breed.armor_type, is_ranged, band)
+			local effective = live_stats.effective_modifier(base_max, live, false)
 
-			best = {
-				zone = nil,
-				base = base_max,
-				value = live_stats.effective_modifier(base_max, live, false),
-				weakspot = false,
-			}
+			if type(effective) == "number" then
+				scored = { {
+					zone = nil,
+					armor = target_info.breed and target_info.breed.armor_type,
+					weakspot = false,
+					value = effective,
+					base = base_max,
+				} }
+				best = scored[1]
+			end
 		end
 
-		if type(best.value) ~= "number" then
+		if not best then
 			return nil
 		end
 
-		-- The part is only named when the parts a player can aim at actually differ
-		-- in armour. On a breed where they are all the same, "全身" is the honest
-		-- answer -- and it keeps every row the same shape.
-		local zone_key = "zone_whole_body"
+		-- Build the display list: named parts in the header's order, collapsed to a
+		-- single "全身" when every part behaves identically (same armour, same
+		-- weakspot status), because listing them separately would be noise.
+		local parts = {}
+		local uniform = #scored > 1
 
-		if best.zone then
-			local zones = armor.zones_with_armor(target_info.breed, true)
-			local first_armor = zones[1] and zones[1].armor
-			local uniform = true
+		for i = 2, #scored do
+			if scored[i].armor ~= scored[1].armor or scored[i].weakspot ~= scored[1].weakspot then
+				uniform = false
 
-			for i = 1, #zones do
-				if zones[i].armor ~= first_armor then
-					uniform = false
-
-					break
-				end
+				break
 			end
+		end
 
-			if not uniform then
-				zone_key = "zone_" .. best.zone
+		if uniform then
+			parts[1] = {
+				zone_key = "zone_whole_body",
+				base = best.base,
+				value = best.value,
+				weakspot = best.weakspot,
+			}
+		else
+			for i = 1, #scored do
+				local part = scored[i]
+
+				parts[#parts + 1] = {
+					zone_key = part.zone and ("zone_" .. part.zone) or "zone_whole_body",
+					base = part.base,
+					value = part.value,
+					weakspot = part.weakspot,
+				}
 			end
 		end
 
@@ -664,13 +680,11 @@ local function refresh()
 			verdict = armor.classify(best.value, bands),
 			max = best.value,
 			base_max = best.base,
+			parts = parts,
 			profile_name = profile.name,
 			variant = nil,
 			action_name = entry.action_name,
 			zone = best.zone,
-			zone_armor = best.armor,
-			zone_key = zone_key,
-			zone_weakspot = best.weakspot == true,
 			active = is_active and true or false,
 		}
 	end
@@ -691,7 +705,7 @@ local function refresh()
 
 			local force_special = kind == "special"
 
-			local line = best_zone_line(
+			local line = attack_line(
 				entry,
 				force_special,
 				(active_kind == kind) or (force_special and state.special_active and active_kind == nil)

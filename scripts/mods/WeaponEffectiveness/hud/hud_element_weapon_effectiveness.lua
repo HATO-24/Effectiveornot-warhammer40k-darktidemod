@@ -236,17 +236,30 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 				label = ACTIVE_MARKER .. label
 			end
 
-			-- The value is "where to hit · how hard": the body part this attack
-			-- wants, and the multiplier it gets there with the player's live bonuses
-			-- folded in. The verdict itself is carried by the colour.
-			local value = line.zone_key and localize(line.zone_key) or ""
+			-- The value lists every body part with its own multiplier, in the same
+			-- order the header names them, so the columns line up between rows. The
+			-- verdict is carried by the colour, taken from the best part.
+			local pieces = {}
 
-			if line.zone_weakspot then
-				value = value .. localize("zone_weakspot_suffix")
+			for part_index = 1, #(line.parts or {}) do
+				local part = line.parts[part_index]
+				local text = localize(part.zone_key)
+
+				if part.weakspot then
+					text = text .. localize("zone_weakspot_suffix")
+				end
+
+				if show_multiplier and type(part.value) == "number" then
+					text = text .. "  " .. string.format("x%.2f", part.value)
+				end
+
+				pieces[#pieces + 1] = text
 			end
 
-			if show_multiplier and type(line.max) == "number" then
-				value = (value ~= "" and (value .. "  ·  ") or "") .. string.format("x%.2f", line.max)
+			local value = table.concat(pieces, "  ·  ")
+
+			if value == "" and type(line.max) == "number" and show_multiplier then
+				value = string.format("x%.2f", line.max)
 			end
 
 			if value == "" then

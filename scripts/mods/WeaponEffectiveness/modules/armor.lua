@@ -536,38 +536,47 @@ function armor.best_zone(damage_profile, breed, is_ranged, band)
 	return best_zone, best_armor, best_max
 end
 
--- Picks the best part by a caller-supplied score instead of the raw armour
--- modifier. The live-stats path needs this: rending favours hard armour and the
--- weakspot multiplier only applies to weakspot parts, so the part that wins can
--- differ from the one the plain armour table would pick.
+-- Every part a player can aim at, each with a caller-supplied score, plus the
+-- highest-scoring one.
 --
--- `rank(zone)` returns the score to compare, plus an optional second value kept
--- alongside it (the readout uses it to show the armour-table number the score was
--- derived from). Returns { zone, armor, weakspot, value, base } or nil.
-function armor.best_zone_by(breed, rank)
-	if type(rank) ~= "function" then
-		return nil
+-- The live-stats path needs both: the readout lists every part with its own
+-- number, and the row colour comes from the best one. Scoring has to come from the
+-- caller because rending favours hard armour and the weakspot multiplier only
+-- applies to weakspot parts, so "best" is not the same question as the raw table's.
+--
+-- `score(zone)` returns the value to compare plus an optional second value kept
+-- alongside it (the armour-table number the score was derived from).
+-- Returns parts, best. Each entry: { zone, armor, weakspot, value, base }.
+function armor.scored_parts(breed, score)
+	if type(score) ~= "function" then
+		return {}, nil
 	end
 
 	local zones = armor.zones_with_armor(breed, true)
-	local best = nil
+	local parts, best = {}, nil
 
 	for i = 1, #zones do
 		local zone = zones[i]
-		local value, base = rank(zone)
+		local value, base = score(zone)
 
-		if type(value) == "number" and (best == nil or value > best.value) then
-			best = {
+		if type(value) == "number" then
+			local part = {
 				zone = zone.zone,
 				armor = zone.armor,
 				weakspot = zone.weakspot ~= nil,
 				value = value,
 				base = type(base) == "number" and base or value,
 			}
+
+			parts[#parts + 1] = part
+
+			if best == nil or value > best.value then
+				best = part
+			end
 		end
 	end
 
-	return best
+	return parts, best
 end
 
 return armor

@@ -242,20 +242,27 @@ if #dropped > 8 then
 end
 check("no real zone is missing from ZONE_ORDER", #dropped, 0)
 
--- best_zone_by: the live-stats path re-ranks the parts, because rending favours
--- hard armour and the weakspot multiplier only applies to weakspot parts.
-local by_table = armor.best_zone_by(pivot_breed, function (zone)
-	local _, base = armor.modifier(flat_profile({ armored = 0.5, super_armor = 2.0 }), zone.armor, false, nil)
+-- scored_parts: the readout lists every part and takes its row colour from the best
+-- of them. Scoring goes through the caller because rending favours hard armour and
+-- the weakspot multiplier only applies to weakspot parts, so "best" is a different
+-- question from the raw table's.
+local function scorer(profile_values)
+	return function (zone)
+		local _, base = armor.modifier(flat_profile(profile_values), zone.armor, false, nil)
 
-	return base, base
-end)
-check("best_zone_by ranks by the raw table", by_table and by_table.zone, "head")
-check("and reports the value it ranked on", by_table and by_table.value, 2.0)
-check("base is kept alongside it", by_table and by_table.base, 2.0)
+		return base and base * (zone.weakspot and 2.0 or 1.0), base
+	end
+end
 
--- A rank function that models a weakspot multiplier big enough to flip the answer.
--- The head has to actually be a weakspot for this to mean anything, so this uses a
--- breed that says so.
+local table_parts, table_best = armor.scored_parts(pivot_breed, scorer({ armored = 0.5, super_armor = 2.0 }))
+check("one part per aimable zone", #table_parts, 2)
+check("listed in display order", table_parts[1] and table_parts[1].zone, "head")
+check("the shield is not among them", table_parts[3], nil)
+check("best by the raw table", table_best and table_best.zone, "head")
+check("base is kept alongside the score", table_best and table_best.base, 2.0)
+
+-- A weakspot multiplier large enough to flip which part wins, on a breed that
+-- actually declares the head a weakspot.
 local flip_breed = {
 	name = "flip_test",
 	armor_type = "armored",
@@ -266,29 +273,23 @@ local flip_breed = {
 		{ actors = { "c_hips" }, name = "torso" },
 	},
 }
-local flipped = armor.best_zone_by(flip_breed, function (zone)
-	local _, base = armor.modifier(flat_profile({ armored = 1.0, super_armor = 0.6 }), zone.armor, false, nil)
-	local value = base and base * (zone.weakspot and 2.0 or 1.0)
+local flip_parts, flip_best = armor.scored_parts(flip_breed, scorer({ armored = 1.0, super_armor = 0.6 }))
+check("live bonuses can flip the best part", flip_best and flip_best.zone, "head")
+check("while the base value still shows the table", flip_best and flip_best.base, 0.6)
+check("and both parts are still listed", #flip_parts, 2)
 
-	return value, base
-end)
-check("live bonuses can flip the best part", flipped and flipped.zone, "head")
-check("while the base value still shows the table", flipped and flipped.base, 0.6)
+-- Without the weakspot flag the raw table decides, which is why the flag travels
+-- through the scoring.
+local plain_best = select(2, armor.scored_parts(pivot_breed, scorer({ armored = 1.0, super_armor = 0.6 })))
+check("no weakspot flag -> the table decides", plain_best and plain_best.zone, "torso")
 
--- ...and without the weakspot flag the raw table still wins, which is the whole
--- reason the flag is carried through the ranking.
-local unflipped = armor.best_zone_by(pivot_breed, function (zone)
-	local _, base = armor.modifier(flat_profile({ armored = 1.0, super_armor = 0.6 }), zone.armor, false, nil)
-	local value = base and base * (zone.weakspot and 2.0 or 1.0)
+local no_score_parts, no_score_best = armor.scored_parts(pivot_breed, nil)
+check("no score function -> no parts", #no_score_parts, 0)
+check("no score function -> no best", no_score_best, nil)
 
-	return value, base
-end)
-check("no weakspot flag -> the table decides", unflipped and unflipped.zone, "torso")
-
-check("no rank function -> nil", armor.best_zone_by(pivot_breed, nil), nil)
-
-local nothing = armor.best_zone_by(pivot_breed, function () return nil end)
-check("rank with no opinion -> nil", nothing, nil)
+local silent_parts, silent_best = armor.scored_parts(pivot_breed, function () return nil end)
+check("a score with no opinion -> no parts", #silent_parts, 0)
+check("a score with no opinion -> no best", silent_best, nil)
 
 local nozones = { name = "nozones", armor_type = "berserker" }
 local bz4, ba4, bm4 = armor.best_zone(flat_profile({ berserker = 0.75 }), nozones, false, nil)
