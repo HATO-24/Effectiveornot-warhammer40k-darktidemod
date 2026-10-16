@@ -97,6 +97,80 @@ return {
 		["zh-cn"] = "暴击",
 		["zh-tw"] = "暴擊",
 	},
+	show_light_multiplier = {
+		en = "Show the light attack multiplier",
+		["zh-cn"] = "显示轻击倍率",
+	},
+	show_light_multiplier_desc = {
+		en = "Turn the number on the light attack row on or off, independently of the others.",
+		["zh-cn"] = "单独开关轻击行上的倍率数字，不影响其他行。",
+	},
+	show_heavy_multiplier = {
+		en = "Show the heavy attack multiplier",
+		["zh-cn"] = "显示重击倍率",
+	},
+	show_heavy_multiplier_desc = {
+		en = "Turn the number on the heavy attack row on or off, independently of the others.",
+		["zh-cn"] = "单独开关重击行上的倍率数字，不影响其他行。",
+	},
+	show_special_multiplier = {
+		en = "Show the special attack multiplier",
+		["zh-cn"] = "显示特殊攻击倍率",
+	},
+	show_special_multiplier_desc = {
+		en = "Turn the number on the special-mode preview row on or off, independently of the others.",
+		["zh-cn"] = "单独开关特殊模式预览行上的倍率数字，不影响其他行。",
+	},
+	detail_mode = {
+		en = "Damage detail",
+		["zh-cn"] = "伤害细则",
+	},
+	detail_mode_desc = {
+		en = "Total shows one number per part. Breakdown appends what it was built from, in"
+			.. " the order the factors apply: the armour-table value, the enemy's own per-part"
+			.. " damage multiplier, and your live weakspot multiplier.",
+		["zh-cn"] = "「总倍率」每个部位一个数字；「显示分项」在后面附上它的来源，按生效顺序："
+			.. "破甲表数值、敌人自身的部位伤害倍率、你的实时弱点倍率。",
+	},
+	detail_mode_total = {
+		en = "Total only",
+		["zh-cn"] = "只显示总倍率",
+	},
+	detail_mode_breakdown = {
+		en = "Show the breakdown",
+		["zh-cn"] = "显示分项",
+	},
+	detail_armor_short = {
+		en = "armor ",
+		["zh-cn"] = "破甲 ",
+		["zh-tw"] = "破甲 ",
+	},
+	detail_zone_short = {
+		en = "zone ",
+		["zh-cn"] = "部位 ",
+		["zh-tw"] = "部位 ",
+	},
+	detail_live_short = {
+		en = "live ",
+		["zh-cn"] = "实时 ",
+		["zh-tw"] = "即時 ",
+	},
+	blessings_label = {
+		en = "Blessings",
+		["zh-cn"] = "祝福",
+		["zh-tw"] = "祝福",
+	},
+	show_blessings = {
+		en = "Show the equipped blessings",
+		["zh-cn"] = "显示已装备的祝福",
+	},
+	show_blessings_desc = {
+		en = "A row listing the blessings on the weapon in hand, read from your loadout."
+			.. " It lists what is equipped, not what has procced -- the stats row above is the"
+			.. " live answer.",
+		["zh-cn"] = "多一行，列出当前手持武器上的祝福（从你的配装读取）。"
+			.. "它显示的是「装了什么」而不是「此刻生效了什么」——实时生效情况看上面的属性行。",
+	},
 	only_in_training_grounds = {
 		en = "Only in the Psykhanium",
 		["zh-cn"] = "仅在灵能室显示",

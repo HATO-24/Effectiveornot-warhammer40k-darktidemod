@@ -229,6 +229,24 @@ check("nil base stays nil", live_stats.effective_modifier(nil, snapshot, true), 
 near("rending is quartered past 1.0", live_stats.effective_modifier(0.90, snapshot, false), 1 + (1.05 - 1) / 4)
 
 print("")
+print("== factors: the same number, split into the pieces it was built from ==")
+local factor_parts = live_stats.factors(0.69, snapshot, true)
+near("table value is untouched", factor_parts.table, 0.69)
+near("rended value has rending applied", factor_parts.rended, 0.84)
+near("weakspot multiplier", factor_parts.weakspot, 1.25)
+near("value is the product", factor_parts.value, 0.84 * 1.25)
+near("and matches effective_modifier", factor_parts.value, live_stats.effective_modifier(0.69, snapshot, true))
+
+local body_factors = live_stats.factors(0.69, snapshot, false)
+near("a body part gets no weakspot multiplier", body_factors.weakspot, 1)
+near("so its value is the rended one", body_factors.value, 0.84)
+
+local no_live_factors = live_stats.factors(0.69, { available = false }, true)
+near("no live stats -> the table value", no_live_factors.value, 0.69)
+near("and a neutral weakspot multiplier", no_live_factors.weakspot, 1)
+check("a non-number base yields nothing", live_stats.factors(nil, snapshot, true), nil)
+
+print("")
 print("== panel_lines: neutral values are left out ==")
 local empty = live_stats.panel_lines({ available = true, rending = 0, weakspot = 0, crit_chance = 0, crit_damage = 1 })
 check("nothing doing -> no lines", #empty, 0)

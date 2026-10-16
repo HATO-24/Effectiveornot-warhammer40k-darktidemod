@@ -44,6 +44,43 @@ return {
 						tooltip = "show_live_stats_panel_desc",
 					},
 					{
+						-- Equipped blessings, read from the loadout. Shows what is on the
+						-- weapon, not what has procced.
+						setting_id = "show_blessings",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "show_blessings_desc",
+					},
+					{
+						-- Per-row number switches: `show_multiplier` remains the master.
+						setting_id = "show_light_multiplier",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "show_light_multiplier_desc",
+					},
+					{
+						setting_id = "show_heavy_multiplier",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "show_heavy_multiplier_desc",
+					},
+					{
+						setting_id = "show_special_multiplier",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "show_special_multiplier_desc",
+					},
+					{
+						setting_id = "detail_mode",
+						type = "dropdown",
+						default_value = "total",
+						tooltip = "detail_mode_desc",
+						options = {
+							{ value = "total", text = "detail_mode_total" },
+							{ value = "breakdown", text = "detail_mode_breakdown" },
+						},
+					},
+					{
 						setting_id = "only_in_training_grounds",
 						type = "checkbox",
 						default_value = false,
@@ -247,17 +284,22 @@ return {
 				type = "group",
 				sub_widgets = {
 					{
+						-- Pixels from the crosshair-centred default. The range covers a
+						-- 1920x1080 screen in both directions, so the panel can be parked
+						-- wherever it is readable.
 						setting_id = "indicator_horizontal_offset",
 						type = "numeric",
 						default_value = 96,
-						range = { -900, 900 },
+						range = { -1920, 1920 },
+						decimals_number = 0,
 						tooltip = "indicator_horizontal_offset_desc",
 					},
 					{
 						setting_id = "indicator_vertical_offset",
 						type = "numeric",
 						default_value = 38,
-						range = { -600, 600 },
+						range = { -1080, 1080 },
+						decimals_number = 0,
 						tooltip = "indicator_vertical_offset_desc",
 					},
 				},

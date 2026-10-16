@@ -182,23 +182,40 @@ end
 -- bonuses. Returns the base modifier unchanged when the live stats are missing,
 -- so the caller never has to care whether the snapshot worked.
 function live_stats.effective_modifier(base_modifier, snapshot, is_weakspot)
-	local modifier = base_modifier
+	local factors = live_stats.factors(base_modifier, snapshot, is_weakspot)
 
-	if type(modifier) ~= "number" then
+	return factors and factors.value or nil
+end
+
+-- The same number, split into the pieces it was built from, for a readout that
+-- wants to show its working:
+--
+--   table    the armour-table modifier, untouched
+--   rended   that modifier with rending applied
+--   weakspot the multiplier a weakspot part gets (1 when the part is not one)
+--   value    rended * weakspot
+--
+-- The breed's own per-zone damage multiplier is deliberately not in here: that is
+-- enemy data rather than a player bonus, so the caller applies it.
+function live_stats.factors(base_modifier, snapshot, is_weakspot)
+	if type(base_modifier) ~= "number" then
 		return nil
 	end
 
-	if type(snapshot) ~= "table" or not snapshot.available then
-		return modifier
+	local available = type(snapshot) == "table" and snapshot.available == true
+	local rended = live_stats.apply_rending(base_modifier, available and snapshot.rending or 0)
+	local weakspot = 1
+
+	if is_weakspot and available then
+		weakspot = 1 + (snapshot.weakspot or 0)
 	end
 
-	modifier = live_stats.apply_rending(modifier, snapshot.rending)
-
-	if is_weakspot and type(modifier) == "number" then
-		modifier = modifier * (1 + (snapshot.weakspot or 0))
-	end
-
-	return modifier
+	return {
+		table = base_modifier,
+		rended = rended,
+		weakspot = weakspot,
+		value = rended * weakspot,
+	}
 end
 
 local function weapon_handling_crit_modifier(player_unit)

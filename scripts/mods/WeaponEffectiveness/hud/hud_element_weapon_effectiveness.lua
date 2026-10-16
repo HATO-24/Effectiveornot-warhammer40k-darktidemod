@@ -23,10 +23,22 @@ local ATTACK_LOC = {
 	heavy = "attack_heavy",
 	special = "attack_special",
 	stats = "live_stats_label",
+	blessings = "blessings_label",
+}
+
+-- Which setting gates the multiplier on each attack row, so light and heavy can be
+-- shown or hidden independently. `show_multiplier` stays the master switch.
+local ROW_MULTIPLIER_SETTING = {
+	light = "show_light_multiplier",
+	heavy = "show_heavy_multiplier",
+	special = "show_special_multiplier",
 }
 
 -- The live panel row is not an attack line: it is filled from state.live_panel.
 local STATS_ROW = "stats"
+
+-- The blessing row is filled from state.blessings.
+local BLESSINGS_ROW = "blessings"
 
 local ARMOR_ROW = "armor"
 
@@ -219,6 +231,24 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 			if #pieces > 0 then
 				set_row(self, row, localize(ATTACK_LOC[row]), table.concat(pieces, "  ·  "), mod.neutral_color(), true)
 			end
+		elseif row == BLESSINGS_ROW then
+			-- The weapon's equipped blessings, named by the game's own localisation.
+			local pieces = {}
+
+			for blessing_index = 1, #(state.blessings or {}) do
+				local blessing = state.blessings[blessing_index]
+				local text = tostring(blessing.text)
+
+				if blessing.tier then
+					text = text .. " " .. blessing.tier
+				end
+
+				pieces[#pieces + 1] = text
+			end
+
+			if #pieces > 0 then
+				set_row(self, row, localize(ATTACK_LOC[row]), table.concat(pieces, "  ·  "), mod.neutral_color(), true)
+			end
 		elseif line then
 			local label = localize(ATTACK_LOC[row])
 
@@ -226,17 +256,36 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 				label = ACTIVE_MARKER .. label
 			end
 
-			-- The value lists every body part with its own multiplier, in the same
-			-- order the header names them, so the columns line up between rows. The
-			-- verdict is carried by the colour, taken from the best part.
+			-- Each row's multiplier can be switched off on its own; the global
+			-- `show_multiplier` still wins.
+			local row_multiplier = show_multiplier
+
+			if row_multiplier and ROW_MULTIPLIER_SETTING[row] then
+				row_multiplier = mod:get(ROW_MULTIPLIER_SETTING[row]) ~= false
+			end
+
+			local breakdown = mod:get("detail_mode") == "breakdown"
 			local pieces = {}
 
 			for part_index = 1, #(line.parts or {}) do
 				local part = line.parts[part_index]
 				local text = localize(part.zone_key)
 
-				if show_multiplier and type(part.value) == "number" then
+				if row_multiplier and type(part.value) == "number" then
 					text = text .. "  " .. string.format("x%.2f", part.value)
+
+					if breakdown and type(part.detail) == "table" then
+						-- What the number was built from, in the order it is applied.
+						text = text .. string.format(
+							"  [%s%.2f %s%.2f %s%.2f]",
+							localize("detail_armor_short"),
+							tonumber(part.detail.rended) or 0,
+							localize("detail_zone_short"),
+							tonumber(part.detail.zone) or 1,
+							localize("detail_live_short"),
+							tonumber(part.detail.weakspot) or 1
+						)
+					end
 				end
 
 				pieces[#pieces + 1] = text
@@ -244,7 +293,7 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 
 			local value = table.concat(pieces, "  ·  ")
 
-			if value == "" and type(line.max) == "number" and show_multiplier then
+			if value == "" and type(line.max) == "number" and row_multiplier then
 				value = string.format("x%.2f", line.max)
 			end
 

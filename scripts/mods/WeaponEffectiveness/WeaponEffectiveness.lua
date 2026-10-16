@@ -339,6 +339,71 @@ local function header_info(breed, name)
 	}
 end
 
+-- The blessings on the weapon currently in hand.
+--
+-- Read exactly the way other runtime mods do it: the profile's loadout holds the
+-- equipped item for a slot, the item carries `traits`, and each trait id resolves
+-- through MasterItems to a master item whose `display_name` is a localisation key.
+-- So every string shown is the game's own, and nothing has to be hard-coded.
+--
+-- This reports what is EQUIPPED, not what is currently procced: a conditional
+-- blessing ("+X% after a kill") is listed whether or not its condition is met. The
+-- live numbers on the stats row are the authoritative answer for what is active
+-- right now.
+local TRAIT_TIERS = { "I", "II", "III", "IV" }
+
+local function weapon_blessings(player, slot_name)
+	local out = {}
+
+	if not player or type(player.profile) ~= "function" or type(slot_name) ~= "string" then
+		return out
+	end
+
+	local ok_profile, profile = pcall(player.profile, player)
+
+	if not ok_profile or type(profile) ~= "table" or type(profile.loadout) ~= "table" then
+		return out
+	end
+
+	local item = profile.loadout[slot_name]
+
+	if type(item) ~= "table" or type(item.traits) ~= "table" then
+		return out
+	end
+
+	for i = 1, #item.traits do
+		local trait = item.traits[i]
+
+		if type(trait) == "table" and trait.id then
+			local ok_item, master = pcall(MasterItems.get_item, trait.id)
+			local key = ok_item and type(master) == "table" and master.display_name or nil
+
+			-- The master item carries the localisation key. When it does not (a trait
+			-- this build does not have an item for), the game's own naming convention
+			-- is the fallback: the trait id minus its "weapon_trait_" prefix, under
+			-- loc_trait_ -- which is how the blessing names are keyed.
+			if type(key) ~= "string" and type(trait.id) == "string" then
+				key = "loc_trait_" .. string.gsub(trait.id, "^weapon_trait_", "")
+			end
+
+			if type(key) == "string" then
+				local ok_text, text = pcall(Localize, key)
+
+				-- An unresolved key comes back as the key itself; showing that would
+				-- just be noise, so it is skipped.
+				if ok_text and type(text) == "string" and text ~= "" and text ~= key then
+					out[#out + 1] = {
+						text = text,
+						tier = TRAIT_TIERS[tonumber(trait.rarity) or 0],
+					}
+				end
+			end
+		end
+	end
+
+	return out
+end
+
 -- ----------------------------------------------------------------- refresh --
 
 -- The aimed enemy's name. Every breed carries `display_name` as a vanilla loc key
@@ -416,6 +481,7 @@ local function refresh()
 
 	state.live_stats = snapshot
 	state.live_panel = setting("show_live_stats_panel", true) ~= false and live_stats.panel_lines(snapshot) or {}
+	state.blessings = setting("show_blessings", true) ~= false and weapon_blessings(player, wielded_slot) or {}
 
 	mod._weapon_dump = {
 		template_name = weapon_template and weapon_template.name,
@@ -614,27 +680,39 @@ local function refresh()
 		local scored, best = armor.scored_parts(target_info.breed, function (zone)
 			local _, base_max = armor.modifier(profile, zone.armor, is_ranged, band)
 			local zone_factor = armor.hitzone_damage_multiplier(target_info.breed, zone.zone, is_ranged)
-			local value = live_stats.effective_modifier(base_max, live, zone.weakspot ~= nil)
+			local factors = live_stats.factors(base_max, live, zone.weakspot ~= nil)
 
-			if type(value) == "number" then
-				value = value * zone_factor
+			if not factors then
+				return nil
 			end
 
-			return value, base_max
+			return factors.value * zone_factor, base_max, {
+				table = factors.table,
+				rended = factors.rended,
+				weakspot = factors.weakspot,
+				zone = zone_factor,
+			}
 		end)
 
 		-- A breed with no zone data at all is judged on its breed-wide armour.
 		if not best then
 			local _, base_max = armor.modifier(profile, target_info.breed and target_info.breed.armor_type, is_ranged, band)
-			local effective = live_stats.effective_modifier(base_max, live, false)
+			local factors = live_stats.factors(base_max, live, false)
 
-			if type(effective) == "number" then
+			if factors then
 				scored = { {
 					zone = nil,
+					display_zone = nil,
 					armor = target_info.breed and target_info.breed.armor_type,
 					weakspot = false,
-					value = effective,
+					value = factors.value,
 					base = base_max,
+					detail = {
+						table = factors.table,
+						rended = factors.rended,
+						weakspot = factors.weakspot,
+						zone = 1,
+					},
 				} }
 				best = scored[1]
 			end
@@ -664,6 +742,7 @@ local function refresh()
 				base = best.base,
 				value = best.value,
 				weakspot = best.weakspot,
+				detail = best.detail,
 			}
 		else
 			for i = 1, #scored do
@@ -676,6 +755,8 @@ local function refresh()
 					base = part.base,
 					value = part.value,
 					weakspot = part.weakspot,
+					-- The factors the value was built from, for the detail mode.
+					detail = part.detail,
 				}
 			end
 		end

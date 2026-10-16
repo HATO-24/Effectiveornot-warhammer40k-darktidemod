@@ -611,9 +611,12 @@ end
 -- caller because rending favours hard armour and the weakspot multiplier only
 -- applies to weakspot parts, so "best" is not the same question as the raw table's.
 --
--- `score(zone)` returns the value to compare plus an optional second value kept
--- alongside it (the armour-table number the score was derived from).
--- Returns parts, best. Each entry: { zone, armor, weakspot, value, base }.
+-- `score(zone)` returns the value to compare, an optional second value kept
+-- alongside it (the armour-table number the score was derived from), and an
+-- optional detail table carried through untouched for a readout that wants to
+-- show its working.
+-- Returns parts, best. Each entry: { zone, display_zone, armor, weakspot, value,
+-- base, detail }.
 function armor.scored_parts(breed, score)
 	if type(score) ~= "function" then
 		return {}, nil
@@ -624,15 +627,17 @@ function armor.scored_parts(breed, score)
 
 	for i = 1, #zones do
 		local zone = zones[i]
-		local value, base = score(zone)
+		local value, base, detail = score(zone)
 
 		if type(value) == "number" then
 			local part = {
 				zone = zone.zone,
+				display_zone = zone.display_zone or zone.zone,
 				armor = zone.armor,
 				weakspot = zone.weakspot ~= nil,
 				value = value,
 				base = type(base) == "number" and base or value,
+				detail = type(detail) == "table" and detail or nil,
 			}
 
 			parts[#parts + 1] = part

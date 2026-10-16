@@ -10,8 +10,9 @@ local settings_horizontal_alignment = Settings.horizontal_alignment
 
 -- Rows are label + value pairs so the attack name can stay neutral while the
 -- verdict carries its own colour, without relying on inline text markup.
--- `stats` is the live panel (rending / weakspot / crit), fed separately.
-local ROWS = { "armor", "light", "heavy", "special", "stats" }
+-- `stats` is the live panel (rending / weakspot / crit) and `blessings` is the
+-- wielded weapon's trait list; both are fed separately from the attack lines.
+local ROWS = { "armor", "light", "heavy", "special", "stats", "blessings" }
 
 local font_type = mod:get("font_type") or "proxima_nova_bold"
 local font_size = mod:get("font_size") or 20

@@ -28,6 +28,9 @@ const ALLOWED = new Set([
 	'fassert', 'Fassert', 'Raycast', 'HudElementBase', 'ScriptUnit_extension',
 	'Wwise', 'Profiler', 'DumpedTable', 'Awake', 'Vector3Box', 'Vector3BoxNew',
 	'UIFontSettings',
+	// Master item lookup, used to resolve trait (blessing) ids to the game's own
+	// localisation keys.
+	'MasterItems',
 ]);
 
 const files = [];
