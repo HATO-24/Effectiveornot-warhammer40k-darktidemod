@@ -348,11 +348,6 @@ return {
 		["zh-cn"] = "当前动作",
 		["zh-tw"] = "當前動作",
 	},
-	zone_weakspot_suffix = {
-		en = " (weakspot)",
-		["zh-cn"] = "(弱点)",
-		["zh-tw"] = "(弱點)",
-	},
 	zone_hound_tail = {
 		en = "Tail",
 		["zh-cn"] = "猎犬尾巴",

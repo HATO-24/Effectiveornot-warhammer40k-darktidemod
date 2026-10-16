@@ -291,9 +291,10 @@ end
 --   * parts equal   -> name the armour once and only call out the weakspot parts
 --                      (`喷火兵 · 狂怒甲 · 头部(弱点)`)
 --
--- Weakspots are marked, not priced: the game multiplies damage on those parts by
--- the attacker's finesse bonuses (`finesse_boost` per armour type in the weapon
--- data), which are character-specific and cannot be read from an armour table.
+-- The header names the enemy and how its aimable parts are armoured: one entry per
+-- part when they differ (`头部 硬壳装甲 · 躯干 防弹装甲`), otherwise the armour
+-- named once. Weakspot status is part of the number each row shows now, so it is
+-- not spelled out here.
 local function header_info(breed, name)
 	if type(breed) ~= "table" then
 		return { name = name }
@@ -301,17 +302,12 @@ local function header_info(breed, name)
 
 	local zones = armor.zones_with_armor(breed, true)
 	local parts = {}
-	local weakspot_zones = {}
 	local seen_armor = {}
 	local first_armor = nil
 	local uniform = true
 
 	for i = 1, #zones do
 		local zone = zones[i]
-
-		if zone.weakspot then
-			weakspot_zones[#weakspot_zones + 1] = "zone_" .. zone.zone
-		end
 
 		if first_armor == nil then
 			first_armor = zone.armor
@@ -325,24 +321,21 @@ local function header_info(breed, name)
 			parts[#parts + 1] = {
 				zone_key = "zone_" .. zone.zone,
 				armor = armor.display_name(zone.armor),
-				weakspot = zone.weakspot ~= nil,
 			}
 		end
 	end
 
 	if uniform then
-		-- One armour everywhere: name it once, then just flag the weakspot parts.
+		-- One armour everywhere: name it once.
 		return {
 			name = name,
 			armor = armor.display_name(breed.armor_type),
-			weakspot_zones = weakspot_zones,
 		}
 	end
 
 	return {
 		name = name,
 		parts = parts,
-		weakspot_zones = weakspot_zones,
 	}
 end
 
@@ -614,11 +607,20 @@ local function refresh()
 		local live = state.live_stats
 
 		-- Scored parts: every aimable part with its effective multiplier, plus the
-		-- best of them for the row colour.
+		-- best of them for the row colour. Three factors go in, and only the first is
+		-- the armour table: the breed's own per-zone damage multiplier (a hound takes
+		-- x3 on every part from melee, an armoured infected x0.2 on the legs from
+		-- ranged), then the player's live bonuses.
 		local scored, best = armor.scored_parts(target_info.breed, function (zone)
 			local _, base_max = armor.modifier(profile, zone.armor, is_ranged, band)
+			local zone_factor = armor.hitzone_damage_multiplier(target_info.breed, zone.zone, is_ranged)
+			local value = live_stats.effective_modifier(base_max, live, zone.weakspot ~= nil)
 
-			return live_stats.effective_modifier(base_max, live, zone.weakspot ~= nil), base_max
+			if type(value) == "number" then
+				value = value * zone_factor
+			end
+
+			return value, base_max
 		end)
 
 		-- A breed with no zone data at all is judged on its breed-wide armour.
@@ -801,11 +803,13 @@ hit_verdict.install({
 
 		if mod._hit_log_count <= 400 then
 			diagnostics.log(
-				"hit profile=%s zone=%s armor=%s weak=%s dmg=%s base=%s pred=%s eff=%s",
+				"hit profile=%s breed=%s zone=%s armor=%s weak=%s crit=%s dmg=%s base=%s pred=%s eff=%s",
 				tostring(record.profile_name),
+				tostring(record.breed_name),
 				tostring(record.hit_zone),
 				tostring(record.armor_type),
 				tostring(record.weakspot),
+				tostring(record.crit),
 				tostring(record.damage),
 				tostring(record.live_base),
 				tostring(record.live_effective),

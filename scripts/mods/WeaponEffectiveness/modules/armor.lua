@@ -508,6 +508,43 @@ function armor.zones_with_armor(breed, actionable_only)
 	return zones
 end
 
+-- The breed's own damage multiplier for a body part, by attack class.
+--
+-- Every breed ships a `hitzone_damage_multiplier` table keyed by attack class
+-- ("melee" / "ranged", sometimes "default" / "explosion"), mapping hit zone to a
+-- damage multiplier. It is not a rounding detail: a hound takes x3 on every part
+-- and x5 on its tail from melee, an armoured infected takes x0.2 on the legs from
+-- ranged, and a bulwark's shield is x0 in every class.
+--
+-- The class table wins over "default" when both name the zone; a zone named by
+-- neither is x1.
+function armor.hitzone_damage_multiplier(breed, zone, is_ranged)
+	if type(breed) ~= "table" or type(zone) ~= "string" then
+		return 1
+	end
+
+	local table_by_class = breed.hitzone_damage_multiplier
+
+	if type(table_by_class) ~= "table" then
+		return 1
+	end
+
+	local class_key = is_ranged and "ranged" or "melee"
+	local class_table = table_by_class[class_key]
+
+	if type(class_table) == "table" and type(class_table[zone]) == "number" then
+		return class_table[zone]
+	end
+
+	local default_table = table_by_class["default"]
+
+	if type(default_table) == "table" and type(default_table[zone]) == "number" then
+		return default_table[zone]
+	end
+
+	return 1
+end
+
 -- The body part this damage profile hits the hardest, by armour modifier, among
 -- the parts a player can deliberately aim at.
 -- Returns zone_name|nil, armor_type, max_modifier. With no zones at all, zone_name

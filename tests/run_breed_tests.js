@@ -291,6 +291,62 @@ local silent_parts, silent_best = armor.scored_parts(pivot_breed, function () re
 check("a score with no opinion -> no parts", #silent_parts, 0)
 check("a score with no opinion -> no best", silent_best, nil)
 
+-- The breed's own per-zone damage multiplier (hitzone_damage_multiplier). It is a
+-- big factor, not a rounding detail: a hound takes x3 on every part from melee and
+-- x5 on its tail, an armoured infected takes x0.2 on the legs from ranged.
+local precedence = {
+	name = "mult_test",
+	armor_type = "armored",
+	hitzone_damage_multiplier = {
+		default = { head = 0.5, torso = 0.25 },
+		melee = { head = 3 },
+	},
+}
+check("a class table wins over default", armor.hitzone_damage_multiplier(precedence, "head", false), 3)
+check("default fills in what the class does not name", armor.hitzone_damage_multiplier(precedence, "torso", false), 0.25)
+check("and applies to the other class too", armor.hitzone_damage_multiplier(precedence, "torso", true), 0.25)
+check("a class-specific entry only applies to that class", armor.hitzone_damage_multiplier(precedence, "head", true), 0.5)
+check("an unlisted zone is neutral", armor.hitzone_damage_multiplier(precedence, "upper_left_arm", false), 1)
+check("a breed with no table is neutral", armor.hitzone_damage_multiplier({ name = "x" }, "head", false), 1)
+check("a nil breed is neutral", armor.hitzone_damage_multiplier(nil, "head", false), 1)
+
+-- Real data: the hound's tail is its big payoff for melee, and the executor -- the
+-- enemy in the reference screenshots -- has no melee table at all, so its melee
+-- numbers must not move.
+local hound_mult = bundle.breeds["chaos_armored_hound"]
+check("hound melee tail is x5", armor.hitzone_damage_multiplier(hound_mult, "hound_tail", false), 5)
+check("hound melee centre mass is x1.5", armor.hitzone_damage_multiplier(hound_mult, "center_mass", false), 1.5)
+check("hound has no ranged table of its own", armor.hitzone_damage_multiplier(hound_mult, "hound_tail", true), 1)
+
+local executor_mult = bundle.breeds["renegade_executor"]
+check("executor melee torso is untouched", armor.hitzone_damage_multiplier(executor_mult, "torso", false), 1)
+check("executor ranged legs are halved", armor.hitzone_damage_multiplier(executor_mult, "lower_left_leg", true), 0.5)
+
+-- Coverage: every multiplier in the real data must read back as a finite number,
+-- and the melee tables must actually be doing something.
+local melee_non_neutral, tables_seen = 0, 0
+for _, breed in pairs(bundle.breeds) do
+	local by_class = breed.hitzone_damage_multiplier
+	if type(by_class) == "table" then
+		tables_seen = tables_seen + 1
+		for class_name, class_table in pairs(by_class) do
+			if type(class_table) == "table" then
+				for zone_name, expected in pairs(class_table) do
+					local got = armor.hitzone_damage_multiplier(breed, zone_name, class_name == "ranged")
+					if type(got) ~= "number" or got ~= got then
+						print("   !! non-numeric multiplier for " .. tostring(zone_name))
+					end
+					if class_name == "melee" and expected ~= 1 then
+						melee_non_neutral = melee_non_neutral + 1
+					end
+				end
+			end
+		end
+	end
+end
+check("real breeds carry a multiplier table", tables_seen >= 40, true)
+check("melee multipliers are mostly non-neutral", melee_non_neutral >= 100, true)
+
 local nozones = { name = "nozones", armor_type = "berserker" }
 local bz4, ba4, bm4 = armor.best_zone(flat_profile({ berserker = 0.75 }), nozones, false, nil)
 check("no zones -> nil zone", bz4, nil)

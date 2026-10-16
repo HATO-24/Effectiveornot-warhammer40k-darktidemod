@@ -17,8 +17,8 @@ from lua_dump_parser import Parser, emit  # noqa: E402
 SRC = r"mods\DshProbe\out\breeds.json"
 OUT = r"mods\WeaponEffectiveness\tests\bundles\breeds_bundle.lua"
 
-KEEP = ("armor_type", "hitzone_armor_override", "hit_zones", "hit_zone_weakspot_types",
-        "display_name", "name")
+KEEP = ("armor_type", "hitzone_armor_override", "hitzone_damage_multiplier", "hit_zones",
+        "hit_zone_weakspot_types", "display_name", "name")
 
 
 def reduce_breed(body):

@@ -172,21 +172,11 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 					text = text .. " " .. part.armor
 				end
 
-				if part.weakspot then
-					text = text .. localize("zone_weakspot_suffix")
-				end
-
 				header_parts[#header_parts + 1] = text
 			end
 		elseif header.armor and header.armor ~= "" then
-			-- One armour everywhere: name it once, then flag the weakspot parts.
-			local text = header.armor
-
-			for index = 1, #(header.weakspot_zones or {}) do
-				text = text .. " · " .. localize(header.weakspot_zones[index]) .. localize("zone_weakspot_suffix")
-			end
-
-			header_parts[#header_parts + 1] = text
+			-- One armour everywhere: name it once.
+			header_parts[#header_parts + 1] = header.armor
 		end
 	end
 
@@ -244,10 +234,6 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 			for part_index = 1, #(line.parts or {}) do
 				local part = line.parts[part_index]
 				local text = localize(part.zone_key)
-
-				if part.weakspot then
-					text = text .. localize("zone_weakspot_suffix")
-				end
 
 				if show_multiplier and type(part.value) == "number" then
 					text = text .. "  " .. string.format("x%.2f", part.value)
