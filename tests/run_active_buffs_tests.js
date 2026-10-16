@@ -144,9 +144,9 @@ check("an unnamed buff is counted, not printed", active_buffs.summary(
 	{ { template_name = "veteran_toughness_on_elite_kill_effect" }, { template_name = "adamant_crit_chance_on_kill_effect" } },
 	4, names
 ), "Energy Cycle  +1")
-check("nothing nameable -> only the count", active_buffs.summary(
+check("nothing nameable -> an empty line, not a count", active_buffs.summary(
 	{ { template_name = "some_internal_id" } }, 4, {}
-), "+1")
+), "")
 check("limit is respected", active_buffs.summary(
 	{ { template_name = "a" }, { template_name = "b" }, { template_name = "c" } }, 2, { a = "A" }
 ), "A  +1")

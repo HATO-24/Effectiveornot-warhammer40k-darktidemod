@@ -120,13 +120,16 @@ end
 -- The buff rows are text: names, stacks and seconds, resolved through whatever the
 -- caller could name (see active_buffs.display_name).
 local function set_buff_row(self, row, entries, names, label)
-	if #entries == 0 then
+	local text = #entries > 0 and active_buffs_ui.summary(entries, BUFF_SLOTS, names) or ""
+
+	-- Nothing nameable -> nothing shown, rather than a row with a count on it.
+	if text == "" then
 		set_row(self, row, "", "", nil, false)
 
 		return
 	end
 
-	set_row(self, row, label, active_buffs_ui.summary(entries, BUFF_SLOTS, names), mod.neutral_color(), true)
+	set_row(self, row, label, text, mod.neutral_color(), true)
 end
 
 HudElementWeaponEffectiveness.on_resolution_modified = function(self)

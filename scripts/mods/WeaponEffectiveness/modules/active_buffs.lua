@@ -196,8 +196,16 @@ function active_buffs.summary(entries, limit, names)
 
 	local line = table.concat(pieces, "  ·  ")
 
+	-- A bare "+4" on its own is not information, it is a permanent smudge: with
+	-- nothing named there is nothing to say, so the row stays empty and the HUD
+	-- hides it. The count is only useful as a tail on a line that already says
+	-- something.
+	if line == "" then
+		return ""
+	end
+
 	if unnamed > 0 then
-		line = (line ~= "" and (line .. "  ") or "") .. "+" .. tostring(unnamed)
+		line = line .. "  +" .. tostring(unnamed)
 	end
 
 	return line
