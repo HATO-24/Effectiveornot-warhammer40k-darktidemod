@@ -91,9 +91,22 @@ function active_buffs.list(unit)
 				remaining = duration * progress
 			end
 
+			-- Copied out so a caller can classify the buff without holding the
+			-- template: this is how a talent-granted buff gets a name at all.
+			local related = {}
+
+			if type(template.related_talents) == "table" then
+				for _, talent_id in pairs(template.related_talents) do
+					if type(talent_id) == "string" then
+						related[#related + 1] = talent_id
+					end
+				end
+			end
+
 			out[#out + 1] = {
 				template_name = type(template.name) == "string" and template.name or nil,
 				icon = template.hud_icon,
+				related_talents = related,
 				-- visual_stack_count is what the native bar prints, so it is preferred
 				-- over the raw count.
 				stacks = call_number(buff, "visual_stack_count") or call_number(buff, "stack_count") or 1,
@@ -130,8 +143,13 @@ function active_buffs.list(unit)
 	return out
 end
 
--- The localised name for a buff, or nil when nothing could resolve one.
+-- The localised name for a buff, or nil when nothing could resolve one. A caller
+-- that already resolved one (buff_sources.split) sets `display`, which wins.
 function active_buffs.resolved_name(entry, names)
+	if type(entry) == "table" and type(entry.display) == "string" and entry.display ~= "" then
+		return entry.display
+	end
+
 	local template_name = entry and entry.template_name
 
 	if type(template_name) ~= "string" then
