@@ -1,17 +1,18 @@
 -- WeaponEffectiveness -- shows, next to the crosshair, whether the weapon you
--- are holding can actually hurt the enemy you are aiming at.
+-- are holding can actually hurt the enemy you are aiming at, and where to hit it.
 --
--- The whole thing is a lookup, not a damage simulation:
+-- Two layers, and the readout always says which one it used:
 --
---   enemy side : breed.armor_type overridden by breed.hitzone_armor_override[zone]
---   weapon side: damage_profile.armor_damage_modifier.attack[armor_type]
+--   base   : breed.armor_type overridden by breed.hitzone_armor_override[zone]
+--            vs damage_profile.armor_damage_modifier.attack[armor_type]
+--   live   : the same armour number, then adjusted by the player's own bonuses --
+--            rending raises it, and a weakspot part multiplies it -- read from
+--            buff_extension:stat_buffs() every frame.
 --
--- and then a threshold band decides effective / reduced / weak / immune.
---
--- Light, heavy and (when the weapon has one) special-mode are evaluated
--- separately, because a weapon's light attack and its heavy attack routinely
--- have different armour modifiers, and activating a power weapon's special mode
--- swaps the damage profile outright.
+-- The live layer is the part that cannot be read off a table, so it is isolated in
+-- modules/live_stats.lua, marked as an estimate where the composition is a model
+-- rather than a documented rule, and calibrated against the damage the game
+-- actually deals (see the hit log).
 
 local mod = get_mod("WeaponEffectiveness")
 
@@ -22,6 +23,7 @@ local hit_verdict = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffect
 local input_state = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/input_state")
 local local_player = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/local_player")
 local hit_marker = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/hit_marker")
+local live_stats = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/live_stats")
 local effectiveness_marker_template = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/markers/effectiveness_marker")
 local diagnostics = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/diagnostics")
 
@@ -410,6 +412,18 @@ local function refresh()
 	local special_active, wielded_slot, slot_component = special_active_of(player_unit, action_component)
 	local resolved = weapon_profiles.resolve(weapon_template)
 
+	-- The player's own damage bonuses, read live. Downstream code treats this as
+	-- optional: when it is unavailable the readout is exactly the armour-table one.
+	local player = local_player.player()
+	local snapshot = live_stats.snapshot(player_unit, player, is_ranged)
+
+	if setting("use_live_stats", true) == false then
+		snapshot = { available = false }
+	end
+
+	state.live_stats = snapshot
+	state.live_panel = setting("show_live_stats_panel", true) ~= false and live_stats.panel_lines(snapshot) or {}
+
 	mod._weapon_dump = {
 		template_name = weapon_template and weapon_template.name,
 		display_name = weapon_template and weapon_template.display_name,
@@ -499,6 +513,14 @@ local function refresh()
 		armor_source = target_info.armor_source,
 		raycast_filter = target_info.raycast_filter,
 		target_steps = target_info.steps,
+		live_stats = {
+			available = snapshot.available,
+			rending = snapshot.rending,
+			weakspot = snapshot.weakspot,
+			finesse = snapshot.finesse,
+			crit_chance = snapshot.crit_chance,
+			crit_damage = snapshot.crit_damage,
+		},
 		input_action_one_hold = input_state.is_held("action_one_hold"),
 		player = local_player.debug(),
 	}
@@ -584,9 +606,31 @@ local function refresh()
 			return nil
 		end
 
-		local best_zone, best_armor, best_max = armor.best_zone(profile, target_info.breed, is_ranged, is_ranged and ranged_band() or nil)
+		local band = is_ranged and ranged_band() or nil
+		local live = state.live_stats
 
-		if type(best_max) ~= "number" then
+		-- Rank the parts by the number the player will actually see: the armour
+		-- modifier with rending applied, times the weakspot multiplier where the
+		-- part is a weakspot. That can pick a different part than the raw table.
+		local best = armor.best_zone_by(target_info.breed, function (zone)
+			local _, base_max = armor.modifier(profile, zone.armor, is_ranged, band)
+
+			return live_stats.effective_modifier(base_max, live, zone.weakspot ~= nil), base_max
+		end)
+
+		-- A breed with no zone data at all is judged on its breed-wide armour.
+		if not best then
+			local _, base_max = armor.modifier(profile, target_info.breed and target_info.breed.armor_type, is_ranged, band)
+
+			best = {
+				zone = nil,
+				base = base_max,
+				value = live_stats.effective_modifier(base_max, live, false),
+				weakspot = false,
+			}
+		end
+
+		if type(best.value) ~= "number" then
 			return nil
 		end
 
@@ -594,9 +638,8 @@ local function refresh()
 		-- in armour. On a breed where they are all the same, "全身" is the honest
 		-- answer -- and it keeps every row the same shape.
 		local zone_key = "zone_whole_body"
-		local zone_weakspot = false
 
-		if best_zone then
+		if best.zone then
 			local zones = armor.zones_with_armor(target_info.breed, true)
 			local first_armor = zones[1] and zones[1].armor
 			local uniform = true
@@ -604,30 +647,27 @@ local function refresh()
 			for i = 1, #zones do
 				if zones[i].armor ~= first_armor then
 					uniform = false
-				end
 
-				if zones[i].zone == best_zone and zones[i].weakspot then
-					zone_weakspot = true
+					break
 				end
 			end
 
 			if not uniform then
-				zone_key = "zone_" .. best_zone
+				zone_key = "zone_" .. best.zone
 			end
 		end
 
 		return {
-			verdict = armor.classify(best_max, bands),
-			max = best_max,
+			verdict = armor.classify(best.value, bands),
+			max = best.value,
+			base_max = best.base,
 			profile_name = profile.name,
 			variant = nil,
 			action_name = entry.action_name,
-			zone = best_zone,
-			zone_armor = best_armor,
+			zone = best.zone,
+			zone_armor = best.armor,
 			zone_key = zone_key,
-			-- The armour-table number ignores the weakspot multiplier, so the part
-			-- is flagged: the player's own build decides how much that adds.
-			zone_weakspot = zone_weakspot,
+			zone_weakspot = best.weakspot == true,
 			active = is_active and true or false,
 		}
 	end
@@ -725,7 +765,37 @@ hit_verdict.install({
 	breed_of = target_module.breed_of,
 	thresholds = thresholds,
 	band = ranged_band,
+	is_ranged = function ()
+		return mod._is_ranged == true
+	end,
+	-- The same armour modifier the readout shows, so every hit logs a predicted
+	-- number next to the damage the game actually dealt.
+	live_modifier = function (damage_profile, armor_type_value, is_ranged_now, is_weakspot)
+		local _, base_max = armor.modifier(damage_profile, armor_type_value, is_ranged_now, is_ranged_now and ranged_band() or nil)
+		local effective = live_stats.effective_modifier(base_max, mod.state and mod.state.live_stats, is_weakspot)
+
+		return base_max, effective
+	end,
 	on_hit = function (record, unit, hit_position)
+		-- Calibration line: the live model's prediction beside the game's own
+		-- result. Comparing head and body hits of one profile is what pins the
+		-- weakspot multiplier down empirically.
+		mod._hit_log_count = (mod._hit_log_count or 0) + 1
+
+		if mod._hit_log_count <= 400 then
+			diagnostics.log(
+				"hit profile=%s zone=%s armor=%s weak=%s dmg=%s base=%s pred=%s eff=%s",
+				tostring(record.profile_name),
+				tostring(record.hit_zone),
+				tostring(record.armor_type),
+				tostring(record.weakspot),
+				tostring(record.damage),
+				tostring(record.live_base),
+				tostring(record.live_effective),
+				tostring(record.efficiency)
+			)
+		end
+
 		hit_marker.spawn(record, unit, hit_position)
 	end,
 })

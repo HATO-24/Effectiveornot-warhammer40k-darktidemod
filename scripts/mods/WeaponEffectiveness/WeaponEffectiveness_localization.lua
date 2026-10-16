@@ -57,6 +57,46 @@ return {
 		en = "Append the raw armour modifier, e.g. x0.25.",
 		["zh-cn"] = "在判定后面附上原始护甲倍率，例如 x0.25。",
 	},
+	use_live_stats = {
+		en = "Fold your live bonuses into the number",
+		["zh-cn"] = "把实时加成算进倍率",
+	},
+	use_live_stats_desc = {
+		en = "Read your current rending / weakspot / finesse bonuses every frame and apply them to"
+			.. " the armour-table number: rending is added to the armour modifier, and a weakspot part"
+			.. " is multiplied. Off = show the plain armour table exactly as before.",
+		["zh-cn"] = "每帧读取你当前的撕裂／弱点／灵巧加成并计入倍率：撕裂加到护甲倍率上，弱点部位再乘算。"
+			.. "关闭后显示的就是纯破甲表数值。",
+	},
+	show_live_stats_panel = {
+		en = "Show the live stats panel",
+		["zh-cn"] = "显示实时属性面板",
+	},
+	show_live_stats_panel_desc = {
+		en = "An extra row listing the bonuses currently in effect (rending, weakspot, crit)."
+			.. " Only non-zero entries are shown.",
+		["zh-cn"] = "多加一行，列出当前生效的加成（撕裂／弱点／暴击）。只显示非零项。",
+	},
+	live_stats_label = {
+		en = "Stats",
+		["zh-cn"] = "属性",
+		["zh-tw"] = "屬性",
+	},
+	live_rending = {
+		en = "Rending",
+		["zh-cn"] = "撕裂",
+		["zh-tw"] = "撕裂",
+	},
+	live_weakspot = {
+		en = "Weakspot",
+		["zh-cn"] = "弱点",
+		["zh-tw"] = "弱點",
+	},
+	live_crit = {
+		en = "Crit",
+		["zh-cn"] = "暴击",
+		["zh-tw"] = "暴擊",
+	},
 	only_in_training_grounds = {
 		en = "Only in the Psykhanium",
 		["zh-cn"] = "仅在灵能室显示",

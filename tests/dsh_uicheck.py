@@ -114,7 +114,8 @@ if not defs_rows:
 else:
     row_names = [name for name in re.findall(r'"([a-z_]+)"', defs_rows.group(1))]
     attack_loc_block = re.search(r"ATTACK_LOC\s*=\s*\{(.*?)\n\}", text["hud"], re.S)
-    loc_kinds = set(re.findall(r'([a-z_]+)\s*=\s*"attack_', attack_loc_block.group(1))) if attack_loc_block else set()
+    # Keys only: the values are localisation keys of several shapes (attack_*, live_*).
+    loc_kinds = set(re.findall(r'^\s*([a-z_]+)\s*=', attack_loc_block.group(1), re.M)) if attack_loc_block else set()
 
     if row_names[0] != "armor":
         problems.append("first ROWS entry is %r, not the armour row" % row_names[0])

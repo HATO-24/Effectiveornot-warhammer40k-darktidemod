@@ -22,7 +22,11 @@ local ATTACK_LOC = {
 	light = "attack_light",
 	heavy = "attack_heavy",
 	special = "attack_special",
+	stats = "live_stats_label",
 }
+
+-- The live panel row is not an attack line: it is filled from state.live_panel.
+local STATS_ROW = "stats"
 
 local ARMOR_ROW = "armor"
 
@@ -208,7 +212,24 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 		local row = ROWS[index]
 		local line = lines_by_kind[row]
 
-		if line then
+		-- The live panel is its own row: read straight from the composed stats.
+		if row == STATS_ROW then
+			local panel = state.live_panel or {}
+			local pieces = {}
+
+			for panel_index = 1, #panel do
+				local entry = panel[panel_index]
+				local name = localize(entry.key)
+
+				if name ~= "" then
+					pieces[#pieces + 1] = name .. " " .. tostring(entry.value)
+				end
+			end
+
+			if #pieces > 0 then
+				set_row(self, row, localize(ATTACK_LOC[row]), table.concat(pieces, "  ·  "), mod.neutral_color(), true)
+			end
+		elseif line then
 			local label = localize(ATTACK_LOC[row])
 
 			if line.active then
@@ -216,10 +237,8 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 			end
 
 			-- The value is "where to hit · how hard": the body part this attack
-			-- wants, and the armour multiplier it gets there. The verdict itself is
-			-- carried by the colour, so it does not need to be spelled out. A part
-			-- that is a weakspot is flagged, because the multiplier shown is the
-			-- armour table only and ignores the build's finesse bonuses.
+			-- wants, and the multiplier it gets there with the player's live bonuses
+			-- folded in. The verdict itself is carried by the colour.
 			local value = line.zone_key and localize(line.zone_key) or ""
 
 			if line.zone_weakspot then

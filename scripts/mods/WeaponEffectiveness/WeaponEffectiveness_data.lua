@@ -29,6 +29,21 @@ return {
 						tooltip = "show_multiplier_desc",
 					},
 					{
+						-- Reads the player's live damage bonuses every frame and folds
+						-- them into the number. Off = the plain armour table, which is
+						-- what the mod showed before this existed.
+						setting_id = "use_live_stats",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "use_live_stats_desc",
+					},
+					{
+						setting_id = "show_live_stats_panel",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "show_live_stats_panel_desc",
+					},
+					{
 						setting_id = "only_in_training_grounds",
 						type = "checkbox",
 						default_value = false,

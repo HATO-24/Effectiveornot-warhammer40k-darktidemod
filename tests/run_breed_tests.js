@@ -242,6 +242,54 @@ if #dropped > 8 then
 end
 check("no real zone is missing from ZONE_ORDER", #dropped, 0)
 
+-- best_zone_by: the live-stats path re-ranks the parts, because rending favours
+-- hard armour and the weakspot multiplier only applies to weakspot parts.
+local by_table = armor.best_zone_by(pivot_breed, function (zone)
+	local _, base = armor.modifier(flat_profile({ armored = 0.5, super_armor = 2.0 }), zone.armor, false, nil)
+
+	return base, base
+end)
+check("best_zone_by ranks by the raw table", by_table and by_table.zone, "head")
+check("and reports the value it ranked on", by_table and by_table.value, 2.0)
+check("base is kept alongside it", by_table and by_table.base, 2.0)
+
+-- A rank function that models a weakspot multiplier big enough to flip the answer.
+-- The head has to actually be a weakspot for this to mean anything, so this uses a
+-- breed that says so.
+local flip_breed = {
+	name = "flip_test",
+	armor_type = "armored",
+	hitzone_armor_override = { head = "super_armor" },
+	hit_zone_weakspot_types = { head = "headshot" },
+	hit_zones = {
+		{ actors = { "c_head" }, name = "head" },
+		{ actors = { "c_hips" }, name = "torso" },
+	},
+}
+local flipped = armor.best_zone_by(flip_breed, function (zone)
+	local _, base = armor.modifier(flat_profile({ armored = 1.0, super_armor = 0.6 }), zone.armor, false, nil)
+	local value = base and base * (zone.weakspot and 2.0 or 1.0)
+
+	return value, base
+end)
+check("live bonuses can flip the best part", flipped and flipped.zone, "head")
+check("while the base value still shows the table", flipped and flipped.base, 0.6)
+
+-- ...and without the weakspot flag the raw table still wins, which is the whole
+-- reason the flag is carried through the ranking.
+local unflipped = armor.best_zone_by(pivot_breed, function (zone)
+	local _, base = armor.modifier(flat_profile({ armored = 1.0, super_armor = 0.6 }), zone.armor, false, nil)
+	local value = base and base * (zone.weakspot and 2.0 or 1.0)
+
+	return value, base
+end)
+check("no weakspot flag -> the table decides", unflipped and unflipped.zone, "torso")
+
+check("no rank function -> nil", armor.best_zone_by(pivot_breed, nil), nil)
+
+local nothing = armor.best_zone_by(pivot_breed, function () return nil end)
+check("rank with no opinion -> nil", nothing, nil)
+
 local nozones = { name = "nozones", armor_type = "berserker" }
 local bz4, ba4, bm4 = armor.best_zone(flat_profile({ berserker = 0.75 }), nozones, false, nil)
 check("no zones -> nil zone", bz4, nil)

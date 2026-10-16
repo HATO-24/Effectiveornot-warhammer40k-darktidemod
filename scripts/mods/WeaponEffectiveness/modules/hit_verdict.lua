@@ -166,11 +166,42 @@ function hit_verdict.on_attack_result(
 	local thresholds = config.thresholds and config.thresholds()
 		or { effective = 1, reduced = 0.5 }
 
+	-- The armour-table number for this hit, and the same number after the player's
+	-- live bonuses. Both are recorded next to the damage the game actually dealt
+	-- and its own weakspot flag, which is what makes the live model calibratable
+	-- from real hits instead of taken on faith.
+	local live_base, live_effective = nil, nil
+
+	if armor_type and config.live_modifier then
+		local is_ranged_now = false
+
+		if config.is_ranged then
+			local ok_ranged, ranged = pcall(config.is_ranged)
+
+			is_ranged_now = ok_ranged and ranged == true
+		end
+
+		local ok_live, base, effective = pcall(
+			config.live_modifier,
+			damage_profile,
+			armor_type,
+			is_ranged_now,
+			hit_weakspot == true
+		)
+
+		if ok_live then
+			live_base = tonumber(base)
+			live_effective = tonumber(effective)
+		end
+	end
+
 	local record = {
 		verdict = armor_module
 			and armor_module.classify(max_modifier, thresholds)
 			or "unknown",
 		max = max_modifier,
+		live_base = live_base,
+		live_effective = live_effective,
 		armor_source_key = source_key,
 		armor_band = used_band,
 		damage = tonumber(damage),
@@ -194,6 +225,8 @@ function hit_verdict.on_attack_result(
 	push_sample({
 		verdict = record.verdict,
 		max = record.max,
+		live_base = record.live_base,
+		live_effective = record.live_effective,
 		armor_source_key = record.armor_source_key,
 		armor_band = record.armor_band,
 		damage = record.damage,

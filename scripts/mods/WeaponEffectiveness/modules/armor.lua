@@ -514,7 +514,6 @@ end
 -- is nil and the breed-wide armour is judged.
 function armor.best_zone(damage_profile, breed, is_ranged, band)
 	local zones = armor.zones_with_armor(breed, true)
-
 	if #zones == 0 then
 		local _, max_modifier = armor.modifier(damage_profile, breed and breed.armor_type, is_ranged, band)
 
@@ -535,6 +534,40 @@ function armor.best_zone(damage_profile, breed, is_ranged, band)
 	end
 
 	return best_zone, best_armor, best_max
+end
+
+-- Picks the best part by a caller-supplied score instead of the raw armour
+-- modifier. The live-stats path needs this: rending favours hard armour and the
+-- weakspot multiplier only applies to weakspot parts, so the part that wins can
+-- differ from the one the plain armour table would pick.
+--
+-- `rank(zone)` returns the score to compare, plus an optional second value kept
+-- alongside it (the readout uses it to show the armour-table number the score was
+-- derived from). Returns { zone, armor, weakspot, value, base } or nil.
+function armor.best_zone_by(breed, rank)
+	if type(rank) ~= "function" then
+		return nil
+	end
+
+	local zones = armor.zones_with_armor(breed, true)
+	local best = nil
+
+	for i = 1, #zones do
+		local zone = zones[i]
+		local value, base = rank(zone)
+
+		if type(value) == "number" and (best == nil or value > best.value) then
+			best = {
+				zone = zone.zone,
+				armor = zone.armor,
+				weakspot = zone.weakspot ~= nil,
+				value = value,
+				base = type(base) == "number" and base or value,
+			}
+		end
+	end
+
+	return best
 end
 
 return armor
