@@ -95,6 +95,32 @@ def main():
     print("buff templates in the game           : %d" % len(buffs))
     print("wrote %s" % OUT)
 
+    # Also emit it as a table the mod itself ships. Depending on another mod's file
+    # path at runtime would break as soon as that mod is moved or removed; the table
+    # is small and the extractor can always regenerate it.
+    lua_path = os.path.join(
+        MODS, "WeaponEffectiveness", "scripts", "mods", "WeaponEffectiveness", "data", "buff_talent_names.lua"
+    )
+    os.makedirs(os.path.dirname(lua_path), exist_ok=True)
+
+    with open(lua_path, "w", encoding="utf-8") as handle:
+        handle.write("-- buff template name -> the talent's localisation key.\n")
+        handle.write("--\n")
+        handle.write("-- Extracted from BuffStackHUD's curated table by\n")
+        handle.write("-- tests/tools/buffstackhud_map.py, and shipped here so the mod does not depend\n")
+        handle.write("-- on another mod being installed. A buff template has no display_name of its\n")
+        handle.write("-- own, and the talent id cannot always be derived from the key (_name suffixes,\n")
+        handle.write("-- and ids that do not resemble the talent at all), which is exactly why this\n")
+        handle.write("-- hand-checked table is worth carrying.\n")
+        handle.write("return {\n")
+
+        for name in sorted(matched_buffs):
+            handle.write('\t["%s"] = "%s",\n' % (name, matched_buffs[name]))
+
+        handle.write("}\n")
+
+    print("wrote %s (%d entries)" % (lua_path, len(matched_buffs)))
+
     sample = list(matched_buffs.items())[:5]
 
     for name, key in sample:

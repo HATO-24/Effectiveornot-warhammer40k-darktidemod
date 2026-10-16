@@ -73,14 +73,31 @@ end
 -- Where one buff belongs, and what to call it.
 --   { source = "weapon" | "talent", name = <localised> }
 -- Returns nil when neither source can name it, which means "do not show it".
-function buff_sources.origin(entry, weapon_names)
+--
+-- `curated` is the hand-checked table shipped in data/buff_talent_names.lua (buff
+-- template name -> talent loc key). It sits between the two derived sources on
+-- purpose: a talent id cannot always be turned into its key mechanically -- some
+-- carry a `_name` suffix, and some do not resemble the talent at all -- so a checked
+-- mapping beats a rule when both are available.
+function buff_sources.origin(entry, weapon_names, curated)
 	local template_name = entry and entry.template_name
 
-	if type(template_name) == "string" and type(weapon_names) == "table" then
-		local named = weapon_names[template_name]
+	if type(template_name) == "string" then
+		if type(weapon_names) == "table" then
+			local named = weapon_names[template_name]
 
-		if type(named) == "string" and named ~= "" then
-			return { source = buff_sources.WEAPON, name = named }
+			if type(named) == "string" and named ~= "" then
+				return { source = buff_sources.WEAPON, name = named }
+			end
+		end
+
+		if type(curated) == "table" then
+			local key = curated[template_name]
+			local text = localize_key(key)
+
+			if text then
+				return { source = buff_sources.TALENT, name = text }
+			end
 		end
 	end
 
@@ -99,12 +116,12 @@ end
 --
 -- Returns weapon, talent, unnamed_count. Each kept entry is the original table plus
 -- `display`, so callers keep the stacks and timing.
-function buff_sources.split(entries, weapon_names)
+function buff_sources.split(entries, weapon_names, curated)
 	local weapon, talent, unnamed = {}, {}, 0
 
 	for i = 1, #(entries or {}) do
 		local entry = entries[i]
-		local origin = buff_sources.origin(entry, weapon_names)
+		local origin = buff_sources.origin(entry, weapon_names, curated)
 
 		if origin then
 			entry.display = origin.name

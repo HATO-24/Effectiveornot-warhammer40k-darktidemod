@@ -55,6 +55,32 @@ local both = buff_sources.origin(
 check("the weapon wins when both could name it", both and both.source, "weapon")
 
 print("")
+print("== the curated table is the third source ==")
+local CURATED = { ogryn_block_increases_power_active_buff = "loc_talent_ogryn_block_increases_power_name" }
+LOC.loc_talent_ogryn_block_increases_power_name = "Block Increases Power"
+
+local curated_origin = buff_sources.origin({ template_name = "ogryn_block_increases_power_active_buff" }, {}, CURATED)
+check("named through the curated table", curated_origin and curated_origin.name, "Block Increases Power")
+check("and it counts as a talent buff", curated_origin and curated_origin.source, "talent")
+
+-- The curated entry must not shadow a weapon blessing of the same template name.
+local both_sources = buff_sources.origin(
+	{ template_name = "ogryn_block_increases_power_active_buff" },
+	{ ogryn_block_increases_power_active_buff = "Energy Cycle" },
+	CURATED
+)
+check("a weapon name still wins", both_sources and both_sources.source, "weapon")
+
+-- A curated entry whose key the localiser cannot resolve must fall through to the
+-- id rule rather than producing a name out of nothing.
+local broken_curated = buff_sources.origin(
+	{ template_name = "some_talent_buff", related_talents = { "zealot_fanatic_rage" } },
+	{},
+	{ some_talent_buff = "loc_talent_does_not_exist" }
+)
+check("an unresolvable curated key falls through", broken_curated and broken_curated.name, "Fanatical Rage")
+
+print("")
 print("== nothing resolvable is not shown ==")
 check("no name anywhere -> nil", buff_sources.origin({ template_name = "veteran_toughness_on_elite_kill_effect" }, {}), nil)
 check("an unknown talent id -> nil", buff_sources.origin({ template_name = "x", related_talents = { "nope" } }, {}), nil)
