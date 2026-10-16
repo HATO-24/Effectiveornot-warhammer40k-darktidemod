@@ -46,8 +46,8 @@ return {
 		["zh-cn"] = "显示敌人护甲类型",
 	},
 	show_armor_name_desc = {
-		en = "Print the armour type of the body part you are aiming at.",
-		["zh-cn"] = "显示你瞄准部位对应的护甲类型名称。",
+		en = "Show the enemy's overall armour type after its name.",
+		["zh-cn"] = "在敌人名字后面显示它的整体护甲类型。",
 	},
 	show_multiplier = {
 		en = "Show the armour multiplier",
@@ -307,6 +307,11 @@ return {
 		en = "Current",
 		["zh-cn"] = "当前动作",
 		["zh-tw"] = "當前動作",
+	},
+	zone_whole_body = {
+		en = "Anywhere",
+		["zh-cn"] = "全身",
+		["zh-tw"] = "全身",
 	},
 	zone_head = {
 		en = "Head",

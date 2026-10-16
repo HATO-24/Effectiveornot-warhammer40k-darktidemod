@@ -81,6 +81,13 @@ if zone_order:
 else:
     problems.append("could not find ZONE_ORDER in armor.lua")
 
+# Plus every zone_* key the scripts reference by name (the whole-body fallback and
+# anything added later must not render as a raw key).
+for name in ("main", "hud"):
+    for key in re.findall(r'"(zone_[a-z_]+)"', text[name]):
+        if key not in loc_keys:
+            problems.append("%s references %r but it is not defined" % (name, key))
+
 # --- 2/3. the right lookup API -------------------------------------------------
 if "mod.localize" not in text["hud"]:
     problems.append("HUD element never calls mod.localize: mod keys would render as unlocalized")

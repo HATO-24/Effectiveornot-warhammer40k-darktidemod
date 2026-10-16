@@ -409,13 +409,26 @@ local ZONE_ORDER = {
 	"lower_tail",
 }
 
+-- The parts a player can actually choose between. Suggesting "lower left arm"
+-- is not advice anyone can act on mid-fight -- the real decision is head or body
+-- -- so the best-zone search only considers these when the breed has any of them.
+local ACTIONABLE_ZONES = {
+	head = true,
+	torso = true,
+	center_mass = true,
+}
+
 -- Every body part the breed has, in display order, with the armour it wears there.
 --
 -- This is the pivot away from resolving which body part the crosshair is on -- a
 -- mapping that kept failing on the real engine. The breed table is data we know is
 -- right (the game's own EnemyStats browser shows it), so the readout instead
 -- answers "which body part should each attack hit".
-function armor.zones_with_armor(breed)
+--
+-- `actionable_only` keeps just the parts the player can aim at deliberately,
+-- falling back to the full list for a breed that has none of them (a hound, whose
+-- only meaningful part is its center mass).
+function armor.zones_with_armor(breed, actionable_only)
 	local zones = {}
 
 	if type(breed) ~= "table" then
@@ -461,14 +474,33 @@ function armor.zones_with_armor(breed)
 		end
 	end
 
+	if not actionable_only then
+		return zones
+	end
+
+	local actionable = {}
+
+	for i = 1, #zones do
+		if ACTIONABLE_ZONES[zones[i].zone] then
+			actionable[#actionable + 1] = zones[i]
+		end
+	end
+
+	-- A breed whose parts are all limbs or special zones (a hound) still gets an
+	-- answer: fall back to everything it has.
+	if #actionable > 0 then
+		return actionable
+	end
+
 	return zones
 end
 
--- The body part this damage profile hits the hardest, by armour modifier.
+-- The body part this damage profile hits the hardest, by armour modifier, among
+-- the parts a player can deliberately aim at.
 -- Returns zone_name|nil, armor_type, max_modifier. With no zones at all, zone_name
 -- is nil and the breed-wide armour is judged.
 function armor.best_zone(damage_profile, breed, is_ranged, band)
-	local zones = armor.zones_with_armor(breed)
+	local zones = armor.zones_with_armor(breed, true)
 
 	if #zones == 0 then
 		local _, max_modifier = armor.modifier(damage_profile, breed and breed.armor_type, is_ranged, band)

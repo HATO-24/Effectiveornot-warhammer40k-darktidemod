@@ -147,21 +147,25 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 		end
 	end
 
-	-- The armour name already changes as the player moves the reticle between body
-	-- parts, because armour is resolved per hit zone; printing the raw hit-zone key
-	-- on top of that would only add untranslated noise.
-	local armor_parts = {}
+	-- Header: who is under the crosshair, and its armour. The body part is no
+	-- longer printed here -- the aimed part could not be resolved reliably, so each
+	-- attack row carries the part instead.
+	local header_parts = {}
+
+	if state.target_name and state.target_name ~= "" then
+		header_parts[#header_parts + 1] = state.target_name
+	end
 
 	if mod:get("show_armor_name") ~= false and state.armor_label and state.armor_label ~= "" then
-		armor_parts[#armor_parts + 1] = state.armor_label
+		header_parts[#header_parts + 1] = state.armor_label
 	end
 
 	if state.has_special and state.special_active then
-		armor_parts[#armor_parts + 1] = localize("special_active_marker")
+		header_parts[#header_parts + 1] = localize("special_active_marker")
 	end
 
-	if #armor_parts > 0 then
-		set_row(self, ARMOR_ROW, "", table.concat(armor_parts, "  "), mod.neutral_color(), true)
+	if #header_parts > 0 then
+		set_row(self, ARMOR_ROW, "", table.concat(header_parts, " · "), mod.neutral_color(), true)
 	end
 
 	local show_multiplier = mod:get("show_multiplier") ~= false
@@ -185,20 +189,17 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 				label = ACTIVE_MARKER .. label
 			end
 
-			local value = localize(VERDICT_LOC[line.verdict] or "verdict_unknown")
+			-- The value is "where to hit · how hard": the body part this attack
+			-- wants, and the armour multiplier it gets there. The verdict itself is
+			-- carried by the colour, so it does not need to be spelled out.
+			local value = line.zone_key and localize(line.zone_key) or ""
 
 			if show_multiplier and type(line.max) == "number" then
-				value = string.format("%s  x%.2f", value, line.max)
+				value = (value ~= "" and (value .. "  ·  ") or "") .. string.format("x%.2f", line.max)
 			end
 
-			-- "which body part this attack wants" annotation, present only when the
-			-- breed's body parts actually differ in armour.
-			if line.zone_key then
-				local zone_name = localize(line.zone_key)
-
-				if zone_name ~= "" then
-					value = value .. "  · " .. zone_name
-				end
+			if value == "" then
+				value = localize(VERDICT_LOC[line.verdict] or "verdict_unknown")
 			end
 
 			set_row(self, row, label, value, mod.verdict_color(line.verdict), true)

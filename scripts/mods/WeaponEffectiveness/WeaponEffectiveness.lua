@@ -283,6 +283,36 @@ end
 
 -- ----------------------------------------------------------------- refresh --
 
+-- The aimed enemy's name. Every breed carries `display_name` as a vanilla loc key
+-- (`loc_breed_display_name_*`), so this goes through the game's own localizer --
+-- the same mechanism the armour names use -- with the same guard against the
+-- "unlocalized" placeholder the game returns for a key it does not have.
+local function enemy_display_name(breed)
+	if type(breed) ~= "table" then
+		return nil
+	end
+
+	local key = breed.display_name
+
+	if type(key) == "string" and key ~= "" then
+		local ok, text = pcall(Localize, key)
+
+		if ok and type(text) == "string" and text ~= "" then
+			local lowered = string.lower(text)
+
+			if not string.find(lowered, "unlocalized", 1, true)
+				and not string.find(text, "loc_", 1, true)
+				and string.sub(text, 1, 1) ~= "<"
+			then
+				return text
+			end
+		end
+	end
+
+	-- Unknown breed: its internal name is still better than showing nothing.
+	return breed.name
+end
+
 local function refresh()
 	local state = mod.state
 	local player_unit = local_player_unit()
@@ -380,7 +410,7 @@ local function refresh()
 	mod._target = target_info
 	state.armor_type = target_info.armor_type
 	state.armor_label = target_info.armor_type and armor.display_name(target_info.armor_type) or nil
-	state.target_name = target_info.breed and target_info.breed.display_name or nil
+	state.target_name = enemy_display_name(target_info.breed)
 	state.hit_zone_name = target_info.hit_zone_name
 
 	-- A compact snapshot of everything that had to go right for the indicator to
@@ -496,20 +526,26 @@ local function refresh()
 			return nil
 		end
 
-		-- Only annotate the body part when body parts actually differ: on a breed
-		-- where every part wears the same armour, "head" carries no information.
-		local zone_key = nil
+		-- The part is only named when the parts a player can aim at actually differ
+		-- in armour. On a breed where they are all the same, "全身" is the honest
+		-- answer -- and it keeps every row the same shape.
+		local zone_key = "zone_whole_body"
 
 		if best_zone then
-			local zones = armor.zones_with_armor(target_info.breed)
+			local zones = armor.zones_with_armor(target_info.breed, true)
 			local first_armor = zones[1] and zones[1].armor
+			local uniform = true
 
 			for i = 2, #zones do
 				if zones[i].armor ~= first_armor then
-					zone_key = "zone_" .. best_zone
+					uniform = false
 
 					break
 				end
+			end
+
+			if not uniform then
+				zone_key = "zone_" .. best_zone
 			end
 		end
 

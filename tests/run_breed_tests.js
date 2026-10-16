@@ -113,6 +113,10 @@ check("override-only zone included", zones[3] and zones[3].zone, "shield")
 check("armour read from override", zones[1].armor, "super_armor")
 check("armour falls back to breed", zones[2].armor, "armored")
 
+local actionable = armor.zones_with_armor(pivot_breed, true)
+check("actionable list drops the shield", #actionable, 2)
+check("actionable list keeps head first", actionable[1] and actionable[1].zone, "head")
+
 local bz, ba, bm = armor.best_zone(flat_profile({ armored = 0.5, super_armor = 2.0 }), pivot_breed, false, nil)
 check("best zone for a head-hunter profile", bz, "head")
 check("its armour", ba, "super_armor")
@@ -123,6 +127,32 @@ check("best zone flips with the profile", bz2, "torso")
 
 local bz3 = armor.best_zone(flat_profile({ armored = 1.0, super_armor = 1.0 }), pivot_breed, false, nil)
 check("tie resolves to the earlier zone (head)", bz3, "head")
+
+-- A shield being the best armour on paper must never be suggested: nobody aims at
+-- a bulwark's shield on purpose.
+local shield_breed = {
+	name = "shield_test",
+	armor_type = "armored",
+	hitzone_armor_override = { shield = "super_armor" },
+	hit_zones = {
+		{ actors = { "c_head" }, name = "head" },
+		{ actors = { "c_shield" }, name = "shield" },
+	},
+}
+local bz_shield = armor.best_zone(flat_profile({ armored = 0.4, super_armor = 3.0 }), shield_breed, false, nil)
+check("shield is never the suggested part", bz_shield, "head")
+
+-- A breed whose only parts are non-actionable still gets an answer from its own
+-- zone list rather than nothing.
+local tail_breed = {
+	name = "tail_test",
+	armor_type = "armored",
+	hit_zones = {
+		{ actors = { "c_tail" }, name = "upper_tail" },
+	},
+}
+local bz_tail = armor.best_zone(flat_profile({ armored = 1.0 }), tail_breed, false, nil)
+check("non-actionable-only breed falls back to its zones", bz_tail, "upper_tail")
 
 local nozones = { name = "nozones", armor_type = "berserker" }
 local bz4, ba4, bm4 = armor.best_zone(flat_profile({ berserker = 0.75 }), nozones, false, nil)
