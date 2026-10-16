@@ -425,6 +425,27 @@ local ACTIONABLE_ZONES = {
 	center_mass = true,
 }
 
+-- Two zone definitions can describe the same body region. 53 of the 59 breeds list
+-- both `torso` and `center_mass`, and in 52 of those the center_mass actors are a
+-- subset of the torso ones -- the scab mauler is torso = c_hips + c_spine +
+-- c_spine1 against center_mass = c_hips + c_spine. To a player that is one place to
+-- shoot, so it is reported once, as 躯干, instead of as two numbers that are usually
+-- identical and occasionally contradictory (5 breeds disagree, e.g. the twin
+-- captains are armored on torso and unarmored on center_mass).
+--
+-- ZONE_ORDER breaks the tie by keeping whichever definition comes first, which is
+-- `torso` -- and torso is the broader of the two in 52 of the 53 cases, so the
+-- surviving entry describes most of the region. A breed with only `center_mass`
+-- (6 of them) reports it as 躯干 too, which is what the player sees it as.
+local DISPLAY_ALIAS = {
+	center_mass = "torso",
+}
+
+-- The region a zone belongs to for display purposes.
+function armor.display_zone(zone_name)
+	return DISPLAY_ALIAS[zone_name] or zone_name
+end
+
 -- Every body part the breed has, in display order, with the armour it wears there.
 --
 -- This is the pivot away from resolving which body part the crosshair is on -- a
@@ -469,21 +490,30 @@ function armor.zones_with_armor(breed, actionable_only)
 		end
 	end
 
+	local emitted = {}
+
 	for i = 1, #ZONE_ORDER do
 		local zone_name = ZONE_ORDER[i]
 
 		if known[zone_name] then
 			local armor_type = type(override) == "table" and override[zone_name] or breed.armor_type
+			local display = armor.display_zone(zone_name)
 
-			zones[#zones + 1] = {
-				zone = zone_name,
-				armor = armor_type,
-				-- "headshot" / "weakspot" / nil. The game multiplies damage against
-				-- these parts by the attacker's finesse bonuses, which are
-				-- character-specific and therefore not in the armour table -- so the
-				-- readout marks them instead of trying to price them in.
-				weakspot = type(weakspot_types) == "table" and weakspot_types[zone_name] or nil,
-			}
+			-- One entry per body region, not per zone definition: see display_zone.
+			-- ZONE_ORDER is what decides which definition survives (torso comes
+			-- before center_mass, and torso is the broader of the two).
+			if not emitted[display] then
+				emitted[display] = true
+
+				zones[#zones + 1] = {
+					zone = zone_name,
+					display_zone = display,
+					armor = armor_type,
+					-- "headshot" / "weakspot" / nil. The game multiplies damage
+					-- against these parts by the attacker's finesse bonuses.
+					weakspot = type(weakspot_types) == "table" and weakspot_types[zone_name] or nil,
+				}
+			end
 		end
 	end
 
@@ -494,7 +524,7 @@ function armor.zones_with_armor(breed, actionable_only)
 	local actionable = {}
 
 	for i = 1, #zones do
-		if ACTIONABLE_ZONES[zones[i].zone] then
+		if ACTIONABLE_ZONES[zones[i].display_zone] then
 			actionable[#actionable + 1] = zones[i]
 		end
 	end

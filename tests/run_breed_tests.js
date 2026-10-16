@@ -154,6 +154,59 @@ local tail_breed = {
 local bz_tail = armor.best_zone(flat_profile({ armored = 1.0 }), tail_breed, false, nil)
 check("non-actionable-only breed falls back to its zones", bz_tail, "upper_tail")
 
+-- torso and center_mass are two overlapping definitions of one body region, so the
+-- readout shows one entry per region. 53 of the 59 breeds list both, and in 52 of
+-- those the center_mass actors are a subset of the torso ones.
+check("center_mass is reported as torso", armor.display_zone("center_mass"), "torso")
+check("other zones keep their name", armor.display_zone("head"), "head")
+check("an unknown zone passes through", armor.display_zone("upper_tail"), "upper_tail")
+
+local executor_zones = armor.zones_with_armor(bundle.breeds["renegade_executor"], true)
+check("the scab mauler shows two parts, not three", #executor_zones, 2)
+check("head first", executor_zones[1] and executor_zones[1].zone, "head")
+check("then one torso region", executor_zones[2] and executor_zones[2].zone, "torso")
+check("and no separate center_mass entry", executor_zones[3], nil)
+
+-- When the two definitions disagree, the broader torso definition survives: the
+-- twin captains are armored on torso and unarmored on center_mass.
+local twin_zones = armor.zones_with_armor(bundle.breeds["renegade_twin_captain"], true)
+local twin_torso = nil
+for i = 1, #twin_zones do
+	if twin_zones[i].display_zone == "torso" then
+		twin_torso = twin_zones[i]
+	end
+end
+check("torso survives the merge", twin_torso and twin_torso.zone, "torso")
+check("with torso's armour, not center_mass'", twin_torso and twin_torso.armor, "armored")
+
+-- A breed with only center_mass still reports one torso region.
+local center_only = {
+	name = "center_only",
+	armor_type = "armored",
+	hit_zones = {
+		{ actors = { "c_head" }, name = "head" },
+		{ actors = { "c_hips" }, name = "center_mass" },
+	},
+}
+local center_zones = armor.zones_with_armor(center_only, true)
+check("center_mass-only breed still shows a torso", #center_zones, 2)
+check("labelled torso", center_zones[2] and armor.display_zone(center_zones[2].zone), "torso")
+
+-- Coverage: across the real data, no breed may report the same region twice.
+local duplicated = {}
+for bname, breed in pairs(bundle.breeds) do
+	local seen = {}
+	local zones = armor.zones_with_armor(breed, true)
+	for i = 1, #zones do
+		local key = zones[i].display_zone or zones[i].zone
+		if seen[key] then
+			duplicated[#duplicated + 1] = tostring(bname) .. ":" .. tostring(key)
+		end
+		seen[key] = true
+	end
+end
+check("no region is reported twice, in any breed", #duplicated, 0)
+
 -- Weakspots come from the breed's own hit_zone_weakspot_types. They are marked
 -- in the readout, never priced into the number: the extra damage depends on the
 -- attacker's finesse bonuses, which are not part of the armour table.

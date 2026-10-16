@@ -319,7 +319,7 @@ local function header_info(breed, name)
 			seen_armor[zone.armor] = true
 
 			parts[#parts + 1] = {
-				zone_key = "zone_" .. zone.zone,
+				zone_key = "zone_" .. armor.display_zone(zone.zone),
 				armor = armor.display_name(zone.armor),
 			}
 		end
@@ -670,7 +670,9 @@ local function refresh()
 				local part = scored[i]
 
 				parts[#parts + 1] = {
-					zone_key = part.zone and ("zone_" .. part.zone) or "zone_whole_body",
+					-- Labelled by region: center_mass is the same place to shoot as
+					-- torso, so both read as 躯干 (see armor.display_zone).
+					zone_key = part.zone and ("zone_" .. armor.display_zone(part.zone)) or "zone_whole_body",
 					base = part.base,
 					value = part.value,
 					weakspot = part.weakspot,
