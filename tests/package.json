@@ -1,0 +1,10 @@
+{
+  "name": "weapon-effectiveness-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Offline verification suite for the WeaponEffectiveness Darktide mod",
+  "dependencies": {
+    "fengari": "^0.1.4",
+    "luaparse": "^0.3.1"
+  }
+}
