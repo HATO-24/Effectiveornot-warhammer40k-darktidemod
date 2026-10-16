@@ -1,8 +1,13 @@
 // Tests for live_stats.lua -- the live, composed damage stats.
 //
-// The two rending cases are not invented: they are the worked examples in the
-// game's own talent descriptions ("25% against carapace plus 15% rending becomes
-// 40%", and "already 90%, plus 15% rending, becomes 1 + (15%+90%-1)/4 = 101.25%").
+// Two things here are not invented:
+//   * the rending cases are the worked examples from the game's own talent text
+//     ("25% against carapace plus 15% rending becomes 40%", and "already 90%, plus
+//     15% rending, becomes 1 + (15%+90%-1)/4 = 101.25%");
+//   * the "at base contributes nothing" section is a regression for the first live
+//     build, which showed "+200% rending / +400% weakspot" on a character with no
+//     such buffs -- because `stat_buffs` starts every multiplier-style entry at its
+//     base (1.0), not at zero.
 const fs = require('fs');
 const path = require('path');
 const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
@@ -10,23 +15,47 @@ const { lua, lauxlib, lualib, to_luastring, to_jsstring } = require('fengari');
 // Repo layout: this file lives in <repo>/tests/, the mod itself is the repo root.
 const SRC = path.join(__dirname, '..', 'scripts', 'mods', 'WeaponEffectiveness', 'modules', 'live_stats.lua');
 
-const STUBS = `
+const STUBS = (metadata) => `
 -- ============================ engine stubs ============================
+BASE_VALUES = {
+	rending_multiplier = 1,
+	melee_rending_multiplier = 1,
+	ranged_rending_multiplier = 1,
+	finesse_modifier_bonus = 1,
+	melee_finesse_modifier_bonus = 1,
+	ranged_finesse_modifier_bonus = 1,
+	critical_strike_damage = 1,
+	melee_critical_strike_damage = 1,
+	ranged_critical_strike_damage = 1,
+	weakspot_damage = 0,
+	melee_weakspot_damage = 0,
+	ranged_weakspot_damage = 0,
+	critical_strike_chance = 0,
+	melee_critical_strike_chance = 0,
+	ranged_critical_strike_chance = 0,
+}
+
 STATS = {}
 HANDLING = nil
 ARCHETYPE_BASE = 0.075
-HAS_BUFF_EXTENSION = true
+
+-- Stands in for scripts/settings/buff/buff_settings.
+local REAL_REQUIRE = require
+require = function (name)
+	if name == "scripts/settings/buff/buff_settings" then
+		${metadata
+			? 'return { stat_buff_types = {}, stat_buff_type_base_values = BASE_VALUES }'
+			: 'return nil'}
+	end
+	if REAL_REQUIRE then return REAL_REQUIRE(name) end
+	return nil
+end
 
 ScriptUnit = {
 	has_extension = function (unit, name)
 		if not unit then return nil end
-		if name == "buff_system" then
-			if not HAS_BUFF_EXTENSION then return nil end
-			return unit.buff
-		end
-		if name == "weapon_system" then
-			return unit.weapon
-		end
+		if name == "buff_system" then return unit.buff end
+		if name == "weapon_system" then return unit.weapon end
 		return nil
 	end,
 }
@@ -75,19 +104,66 @@ near("90% + 15% -> 1 + 0.05/4 = 1.0125", live_stats.apply_rending(0.90, 0.15), 1
 near("no rending leaves the base alone", live_stats.apply_rending(0.75, 0), 0.75)
 check("nil base stays nil", live_stats.apply_rending(nil, 0.15), nil)
 near("exactly 1.0 is not quartered", live_stats.apply_rending(0.85, 0.15), 1.0)
+near("negative rending lowers it", live_stats.apply_rending(0.50, -0.1), 0.40)
 
 print("")
-print("== snapshot: which keys apply to which weapon class ==")
+print("== the regression: a stat sitting at its base contributes nothing ==")
+-- Exactly the field report: no rending or weakspot buffs at all, yet the panel read
+-- "+200% rending / +400% weakspot", because the multiplier-style entries were read
+-- as raw bonuses instead of being measured against their base.
 STATS = {
-	rending_multiplier = 0.05,
-	melee_rending_multiplier = 0.10,
-	ranged_rending_multiplier = 0.20,
+	rending_multiplier = 1,
+	melee_rending_multiplier = 1,
+	ranged_rending_multiplier = 1,
+	finesse_modifier_bonus = 1,
+	melee_finesse_modifier_bonus = 1,
+	ranged_finesse_modifier_bonus = 1,
+	critical_strike_damage = 1,
+	melee_critical_strike_damage = 1,
+	ranged_critical_strike_damage = 1,
+	weakspot_damage = 0,
+	melee_weakspot_damage = 0,
+	ranged_weakspot_damage = 0,
+	critical_strike_chance = 0,
+	melee_critical_strike_chance = 0,
+	ranged_critical_strike_chance = 0,
+}
+HANDLING = { critical_strike = { chance_modifier = 0 } }
+
+local unit = make_unit(STATS, HANDLING)
+local player = make_player(ARCHETYPE_BASE)
+local unbuffed = live_stats.snapshot(unit, player, false)
+
+near("unbuffed rending is 0", unbuffed.rending, 0)
+near("unbuffed weakspot is 0", unbuffed.weakspot, 0)
+near("unbuffed finesse is 0", unbuffed.finesse, 0)
+near("unbuffed crit damage is 1", unbuffed.crit_damage, 1)
+near("unbuffed crit chance is just the archetype base", unbuffed.crit_chance, ARCHETYPE_BASE)
+
+-- The crit line is informational (the archetype base is always there), but a bonus
+-- that is not being granted must not appear.
+local unbuffed_lines = live_stats.panel_lines(unbuffed)
+local unbuffed_keys = {}
+for i = 1, #unbuffed_lines do
+	unbuffed_keys[unbuffed_lines[i].key] = true
+end
+check("no rending line when nothing grants rending", unbuffed_keys.live_rending, nil)
+check("no weakspot line when nothing grants it", unbuffed_keys.live_weakspot, nil)
+check("crit is still reported", unbuffed_keys.live_crit, true)
+near("and the number stays the armour table", live_stats.effective_modifier(0.69, unbuffed, true), 0.69)
+
+print("")
+print("== snapshot: deltas, per weapon class ==")
+STATS = {
+	rending_multiplier = 1.05,
+	melee_rending_multiplier = 1.10,
+	ranged_rending_multiplier = 1.20,
 	weakspot_damage = 0.10,
 	melee_weakspot_damage = 0.05,
 	ranged_weakspot_damage = 0.15,
-	finesse_modifier_bonus = 0.30,
-	melee_finesse_modifier_bonus = 0.02,
-	ranged_finesse_modifier_bonus = 0.04,
+	finesse_modifier_bonus = 1.30,
+	melee_finesse_modifier_bonus = 1.02,
+	ranged_finesse_modifier_bonus = 1.04,
 	critical_strike_chance = 0.05,
 	melee_critical_strike_chance = 0.025,
 	ranged_critical_strike_chance = 0.075,
@@ -97,20 +173,29 @@ STATS = {
 }
 HANDLING = { critical_strike = { chance_modifier = 0.01 } }
 
-local unit = make_unit(STATS, HANDLING)
-local player = make_player(ARCHETYPE_BASE)
+-- Rebuilt because make_unit captured the previous table.
+unit = make_unit(STATS, HANDLING)
 
 local melee = live_stats.snapshot(unit, player, false)
 check("melee snapshot is available", melee.available, true)
 near("melee rending = generic + melee", melee.rending, 0.15)
 near("melee weakspot = generic + melee + finesse", melee.weakspot, 0.10 + 0.05 + 0.30 + 0.02)
-near("melee crit damage", melee.crit_damage, 1.5 + 1.2 - 1)
+near("melee crit damage", melee.crit_damage, 1 + 0.5 + 0.2)
 near("melee crit chance = base + generic + melee + handling", melee.crit_chance, 0.075 + 0.05 + 0.025 + 0.01)
 
 local ranged = live_stats.snapshot(unit, player, true)
 near("ranged rending = generic + ranged", ranged.rending, 0.25)
 near("ranged weakspot = generic + ranged + finesse", ranged.weakspot, 0.10 + 0.15 + 0.30 + 0.04)
 near("ranged crit chance = base + generic + ranged + handling", ranged.crit_chance, 0.075 + 0.05 + 0.075 + 0.01)
+
+print("")
+print("== raw readings are kept, so a surprising number can be explained ==")
+local rending_raw = melee.raw and melee.raw.rending_multiplier
+check("raw value recorded", rending_raw and rending_raw.value, 1.05)
+check("base recorded", rending_raw and rending_raw.base, 1)
+near("delta recorded", rending_raw and rending_raw.delta, 0.05)
+local weakspot_raw = melee.raw and melee.raw.weakspot_damage
+check("an additive stat's base is 0", weakspot_raw and weakspot_raw.base, 0)
 
 print("")
 print("== snapshot: missing pieces degrade to neutral, never to an error ==")
@@ -127,6 +212,11 @@ check("but the rest still resolves", no_archetype.available, true)
 
 local clamped = live_stats.snapshot(make_unit({ critical_strike_chance = 5 }, HANDLING), player, false)
 near("crit chance clamps to 1", clamped.crit_chance, 1)
+
+local raising = live_stats.snapshot({
+	buff = { stat_buffs = function () error("engine said no") end },
+}, player, false)
+check("a raising stat table -> unavailable", raising.available, false)
 
 print("")
 print("== effective_modifier ==")
@@ -156,18 +246,64 @@ print(string.format("%d checks, %d failures", checks, failures))
 if failures > 0 then os.exit(1) end
 `;
 
-const L = lauxlib.luaL_newstate();
-lualib.luaL_openlibs(L);
+// The fallback path only runs when the game's metadata is missing, which cannot be
+// toggled after load, so it gets its own state.
+const FALLBACK_TEST = `
+local checks, failures = 0, 0
+local function near(label, got, want)
+	checks = checks + 1
+	if type(got) ~= "number" or math.abs(got - want) > 0.0001 then
+		failures = failures + 1
+		print(string.format("  FAIL %-56s got=%s want=%s", label, tostring(got), tostring(want)))
+	else
+		print(string.format("  ok   %-56s %s", label, tostring(got)))
+	end
+end
 
-const chunk = [
-	STUBS,
-	'local live_stats = (function()',
-	fs.readFileSync(SRC, 'utf8'),
-	'end)()',
-	TEST,
-].join('\n');
+print("== no metadata: names decide the base, and 'no buffs' still means zero ==")
+check_metadata = live_stats.stat_type("rending_multiplier")
+print("  (stat_type with no metadata: " .. tostring(check_metadata) .. ")")
 
-if (lauxlib.luaL_dostring(L, to_luastring(chunk)) !== lua.LUA_OK) {
-	console.error('LUA ERROR: ' + to_jsstring(lua.lua_tostring(L, -1)));
-	process.exit(1);
+-- Without the game's table the module falls back to the naming convention:
+-- *_multiplier and *_modifier_bonus are neutral at 1, everything else at 0.
+local stats = {
+	rending_multiplier = 1,
+	melee_rending_multiplier = 1,
+	finesse_modifier_bonus = 1,
+	melee_finesse_modifier_bonus = 1,
+	weakspot_damage = 0,
+	melee_weakspot_damage = 0,
+	critical_strike_damage = 1,
+	melee_critical_strike_damage = 1,
 }
+local unit = { buff = { stat_buffs = function () return stats end } }
+local snapshot = live_stats.snapshot(unit, nil, false)
+near("unbuffed rending still reads 0", snapshot.rending, 0)
+near("unbuffed weakspot still reads 0", snapshot.weakspot, 0)
+near("unbuffed crit damage still reads 1", snapshot.crit_damage, 1)
+
+print("")
+print(string.format("%d checks, %d failures", checks, failures))
+if failures > 0 then os.exit(1) end
+`;
+
+function run(prelude, body, label) {
+  const L = lauxlib.luaL_newstate();
+  lualib.luaL_openlibs(L);
+
+  const chunk = [
+    prelude,
+    'local live_stats = (function()',
+    fs.readFileSync(SRC, 'utf8'),
+    'end)()',
+    body,
+  ].join('\n');
+
+  if (lauxlib.luaL_dostring(L, to_luastring(chunk)) !== lua.LUA_OK) {
+    console.error('LUA ERROR (' + label + '): ' + to_jsstring(lua.lua_tostring(L, -1)));
+    process.exit(1);
+  }
+}
+
+run(STUBS(true), TEST, 'with metadata');
+run(STUBS(false), FALLBACK_TEST, 'without metadata');

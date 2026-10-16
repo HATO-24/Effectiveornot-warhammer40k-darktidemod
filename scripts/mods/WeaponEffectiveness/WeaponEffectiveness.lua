@@ -520,6 +520,9 @@ local function refresh()
 			finesse = snapshot.finesse,
 			crit_chance = snapshot.crit_chance,
 			crit_damage = snapshot.crit_damage,
+			-- Every stat that fed those sums, with the base it was measured against:
+			-- a surprising total explains itself from this alone.
+			raw = snapshot.raw,
 		},
 		input_action_one_hold = input_state.is_held("action_one_hold"),
 		player = local_player.debug(),
@@ -1002,6 +1005,44 @@ mod:command("wepcheckstate", "Report what the indicator currently sees, and why 
 		tostring(probe.armor_source),
 		tostring(probe.raycast_filter)
 	))
+
+	-- The live layer, with its inputs. A surprising total ("+200% rending"?) is
+	-- answered by the per-key lines below it: each shows the raw aggregated value,
+	-- the base it is neutral at, and the delta actually applied.
+	local live = probe.live_stats
+
+	if live then
+		mod:echo(string.format(
+			"  live: available=%s rending=%+.3f weakspot=%+.3f finesse=%+.3f crit=%s x%.2f",
+			tostring(live.available),
+			tonumber(live.rending) or 0,
+			tonumber(live.weakspot) or 0,
+			tonumber(live.finesse) or 0,
+			live.crit_chance and string.format("%.3f", live.crit_chance) or "-",
+			tonumber(live.crit_damage) or 1
+		))
+
+		local keys = {}
+
+		for key in pairs(live.raw or {}) do
+			keys[#keys + 1] = key
+		end
+
+		table.sort(keys)
+
+		for index = 1, #keys do
+			local key = keys[index]
+			local entry = live.raw[key]
+
+			mod:echo(string.format(
+				"    %s raw=%s base=%s delta=%+.3f",
+				key,
+				tostring(entry.value),
+				tostring(entry.base),
+				tonumber(entry.delta) or 0
+			))
+		end
+	end
 
 	-- The body-part resolution is the part most likely to fail silently, so it gets
 	-- its own line: which of the three routes won, what the engine's zone

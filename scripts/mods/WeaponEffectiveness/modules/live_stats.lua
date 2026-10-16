@@ -24,6 +24,114 @@
 
 local live_stats = {}
 
+-- The game's own metadata about each stat:
+--
+--   stat_buff_types[name]            "value" | "additive_multiplier" | "multiplicative_multiplier"
+--   stat_buff_type_base_values[name] the value a stat sits at with no buffs at all
+--
+-- The second one is not optional. `stat_buffs` starts every entry at its BASE, not
+-- at zero (NumericUI relies on exactly that: "Every stat starts at its base value,
+-- as BuffExtensionBase._reset_stat_buffs leaves them"), so a multiplier-style stat
+-- reads 1.0 when the player has no bonus at all. Treating that as "+100%" inflated
+-- every row: the first live build showed "+200% rending / +400% weakspot" on a
+-- character with no such buffs, purely from un-subtracted bases.
+--
+-- There is no pcall around the require: when the module is missing the whole file
+-- degrades to "no live stats", which is the same path as an unreadable buff table.
+local ok_settings, BuffSettings = pcall(require, "scripts/settings/buff/buff_settings")
+
+if not ok_settings then
+	BuffSettings = nil
+end
+
+-- Neutral values, used only when the game's own table does not cover a stat.
+--
+-- The key list comes first because the naming is not a reliable guide:
+-- `critical_strike_damage` is a multiplier that happens to end in `_damage`
+-- (InventoryStats' formula defaults it to 1 and subtracts one per entry, which only
+-- makes sense if 1 is neutral), so the suffix rule would get it wrong.
+local BASE_BY_KEY = {
+	rending_multiplier = 1,
+	melee_rending_multiplier = 1,
+	ranged_rending_multiplier = 1,
+	finesse_modifier_bonus = 1,
+	melee_finesse_modifier_bonus = 1,
+	ranged_finesse_modifier_bonus = 1,
+	critical_strike_damage = 1,
+	melee_critical_strike_damage = 1,
+	ranged_critical_strike_damage = 1,
+
+	weakspot_damage = 0,
+	melee_weakspot_damage = 0,
+	ranged_weakspot_damage = 0,
+	critical_strike_chance = 0,
+	melee_critical_strike_chance = 0,
+	ranged_critical_strike_chance = 0,
+}
+
+local BASE_BY_SUFFIX = {
+	-- Multiplier-style stats are neutral at 1.
+	["_multiplier"] = 1,
+	["_modifier_bonus"] = 1,
+	-- Bonuses and chances are neutral at 0.
+	["_damage"] = 0,
+	["_chance"] = 0,
+}
+
+-- The value a stat is neutral at. The game's table wins when it has an entry.
+function live_stats.base_value(key, fallback)
+	local bases = BuffSettings and BuffSettings.stat_buff_type_base_values
+
+	if type(bases) == "table" and type(bases[key]) == "number" then
+		return bases[key]
+	end
+
+	return fallback or 0
+end
+
+function live_stats.stat_type(key)
+	local types = BuffSettings and BuffSettings.stat_buff_types
+
+	if type(types) == "table" and type(types[key]) == "string" then
+		return types[key]
+	end
+
+	return nil
+end
+
+-- The fallback base, used only when the metadata is unavailable.
+local function fallback_base(key)
+	if BASE_BY_KEY[key] ~= nil then
+		return BASE_BY_KEY[key]
+	end
+
+	for suffix, base in pairs(BASE_BY_SUFFIX) do
+		if string.sub(key, -#suffix) == suffix then
+			return base
+		end
+	end
+
+	return 0
+end
+
+-- How much this stat is above neutral right now, plus the raw reading and the base
+-- it was measured against (both kept for the diagnostics dump).
+local function delta(stats, key)
+	local raw = type(stats) == "table" and stats[key] or nil
+
+	if type(raw) ~= "number" then
+		return 0, nil, nil
+	end
+
+	local implicit = fallback_base(key)
+
+	-- Multiplicative stats combine by product, so their contribution to a sum is
+	-- still measured against the neutral 1.
+	local base = live_stats.base_value(key, implicit)
+
+	return raw - base, raw, base
+end
+
 local RENDING_GENERIC = "rending_multiplier"
 local RENDING_MELEE = "melee_rending_multiplier"
 local RENDING_RANGED = "ranged_rending_multiplier"
@@ -45,16 +153,6 @@ local CRIT_DAMAGE_RANGED = "ranged_critical_strike_damage"
 local CRIT_CHANCE_GENERIC = "critical_strike_chance"
 local CRIT_CHANCE_MELEE = "melee_critical_strike_chance"
 local CRIT_CHANCE_RANGED = "ranged_critical_strike_chance"
-
-local function number_or(stats, key, fallback)
-	local value = type(stats) == "table" and stats[key] or nil
-
-	if type(value) == "number" then
-		return value
-	end
-
-	return fallback
-end
 
 -- Rending is added straight onto the armour modifier, and only the part that
 -- pushes the result past 1.0 is quartered.
@@ -169,6 +267,17 @@ function live_stats.snapshot(player_unit, player, is_ranged)
 
 	out.available = true
 	out.stats = stats
+	out.raw = {}
+
+	local function take(key)
+		local value, raw, base = delta(stats, key)
+
+		if raw ~= nil then
+			out.raw[key] = { value = raw, base = base, delta = value }
+		end
+
+		return value
+	end
 
 	local class_rending = is_ranged and RENDING_RANGED or RENDING_MELEE
 	local class_weakspot = is_ranged and WEAKSPOT_RANGED or WEAKSPOT_MELEE
@@ -176,15 +285,12 @@ function live_stats.snapshot(player_unit, player, is_ranged)
 	local class_crit_damage = is_ranged and CRIT_DAMAGE_RANGED or CRIT_DAMAGE_MELEE
 	local class_crit_chance = is_ranged and CRIT_CHANCE_RANGED or CRIT_CHANCE_MELEE
 
-	out.rending = number_or(stats, RENDING_GENERIC, 0) + number_or(stats, class_rending, 0)
-	out.finesse = number_or(stats, FINESSE_GENERIC, 0) + number_or(stats, class_finesse, 0)
-	out.weakspot = number_or(stats, WEAKSPOT_GENERIC, 0) + number_or(stats, class_weakspot, 0) + out.finesse
+	out.rending = take(RENDING_GENERIC) + take(class_rending)
+	out.finesse = take(FINESSE_GENERIC) + take(class_finesse)
+	out.weakspot = take(WEAKSPOT_GENERIC) + take(class_weakspot) + out.finesse
 
-	-- Crit damage, following the game's own helper: the generic entry plus the
-	-- matching weapon-class entry, each neutral at 1, minus the duplicated base.
-	out.crit_damage = number_or(stats, CRIT_DAMAGE_GENERIC, 1)
-		+ number_or(stats, class_crit_damage, 1)
-		- 1
+	-- Crit damage: neutral at 1, plus whatever the generic and class bonuses add.
+	out.crit_damage = 1 + take(CRIT_DAMAGE_GENERIC) + take(class_crit_damage)
 
 	-- Crit chance, following scripts/utilities/attack/critical_strike as re-stated
 	-- by InventoryStats: archetype base + generic + weapon class + the weapon's own
@@ -193,8 +299,8 @@ function live_stats.snapshot(player_unit, player, is_ranged)
 
 	if base then
 		local chance = base
-			+ number_or(stats, CRIT_CHANCE_GENERIC, 0)
-			+ number_or(stats, class_crit_chance, 0)
+			+ take(CRIT_CHANCE_GENERIC)
+			+ take(class_crit_chance)
 			+ weapon_handling_crit_modifier(player_unit)
 
 		if chance < 0 then
