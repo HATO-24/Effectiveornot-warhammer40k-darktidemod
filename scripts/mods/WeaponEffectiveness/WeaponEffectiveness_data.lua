@@ -52,6 +52,20 @@ return {
 						tooltip = "show_blessings_desc",
 					},
 					{
+						-- Live buffs, read from the buff extension the way the game's own
+						-- bar reads them.
+						setting_id = "show_player_buffs",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "show_player_buffs_desc",
+					},
+					{
+						setting_id = "show_enemy_debuffs",
+						type = "checkbox",
+						default_value = true,
+						tooltip = "show_enemy_debuffs_desc",
+					},
+					{
 						-- Per-row number switches: `show_multiplier` remains the master.
 						setting_id = "show_light_multiplier",
 						type = "checkbox",

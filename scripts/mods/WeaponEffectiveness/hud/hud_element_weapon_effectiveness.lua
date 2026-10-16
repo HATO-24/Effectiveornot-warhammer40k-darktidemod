@@ -9,6 +9,11 @@ local WIDGET = "weapon_effectiveness"
 local ROWS = Definitions.rows
 local LINE_HEIGHT = Definitions.line_height
 local LABEL_WIDTH = Definitions.label_width
+local BUFF_SLOTS = Definitions.buff_slots or 0
+
+-- The icon rows, and which state list feeds each.
+local PLAYER_BUFFS_ROW = "buffs"
+local ENEMY_BUFFS_ROW = "debuffs"
 
 local VERDICT_LOC = {
 	effective = "verdict_effective",
@@ -24,6 +29,8 @@ local ATTACK_LOC = {
 	special = "attack_special",
 	stats = "live_stats_label",
 	blessings = "blessings_label",
+	buffs = "player_buffs_label",
+	debuffs = "enemy_debuffs_label",
 }
 
 -- Which setting gates the multiplier on each attack row, so light and heavy can be
@@ -109,6 +116,36 @@ local function set_row(self, row, label, value, color, visible)
 	end
 end
 
+-- Fills one of the icon rows: `entries` come from modules/active_buffs, one slot
+-- each, with the progress bar drawn from the remaining fraction.
+local function set_buff_row(self, row, entries, label)
+	local widget = self._widgets_by_name[WIDGET]
+
+	if not widget then
+		return
+	end
+
+	for slot = 1, BUFF_SLOTS do
+		local id = row .. "_" .. slot
+		local entry = entries[slot]
+
+		if entry then
+			widget.content[id] = entry.icon
+			widget.content[id .. "_progress"] = entry.progress
+			-- Like the native bar: the numeral only appears when it means something.
+			widget.content[id .. "_stacks"] = (entry.stacks or 1) > 1 and ("x" .. tostring(entry.stacks)) or ""
+			widget.content[id .. "_time"] = entry.remaining and string.format("%.0fs", entry.remaining) or ""
+		else
+			widget.content[id] = nil
+			widget.content[id .. "_progress"] = nil
+			widget.content[id .. "_stacks"] = ""
+			widget.content[id .. "_time"] = ""
+		end
+	end
+
+	set_row(self, row, label, "", nil, label ~= nil and label ~= "")
+end
+
 HudElementWeaponEffectiveness.on_resolution_modified = function(self)
 	HudElementWeaponEffectiveness.super.on_resolution_modified(self)
 end
@@ -133,8 +170,12 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 	end
 
 	local state = mod.state
+	local player_buff_count = state and state.player_buffs and #state.player_buffs or 0
+	local has_target = state and state.visible
 
-	if not state or not state.visible then
+	-- Weapon-side buffs are about what you are holding, not about what you are
+	-- aiming at, so they stay on screen with nothing under the crosshair.
+	if not state or (not has_target and player_buff_count == 0) then
 		for index = 1, #ROWS do
 			set_row(self, ROWS[index], "", "", nil, false)
 		end
@@ -161,6 +202,14 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 		if mode_name ~= "shooting_range" then
 			return
 		end
+	end
+
+	if player_buff_count > 0 then
+		set_buff_row(self, PLAYER_BUFFS_ROW, state.player_buffs, localize(ATTACK_LOC[PLAYER_BUFFS_ROW]))
+	end
+
+	if not has_target then
+		return
 	end
 
 	-- Header: who is under the crosshair, and how its parts are armoured. The
@@ -214,8 +263,18 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 		local row = ROWS[index]
 		local line = lines_by_kind[row]
 
+		-- The icon rows: one slot per live buff, drawn from the game's own buff
+		-- icons (see modules/active_buffs).
+		if row == PLAYER_BUFFS_ROW then
+			local entries = state.player_buffs or {}
+
+			set_buff_row(self, row, entries, #entries > 0 and localize(ATTACK_LOC[row]) or "")
+		elseif row == ENEMY_BUFFS_ROW then
+			local entries = state.target_buffs or {}
+
+			set_buff_row(self, row, entries, #entries > 0 and localize(ATTACK_LOC[row]) or "")
 		-- The live panel is its own row: read straight from the composed stats.
-		if row == STATS_ROW then
+		elseif row == STATS_ROW then
 			local panel = state.live_panel or {}
 			local pieces = {}
 
@@ -237,13 +296,8 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 
 			for blessing_index = 1, #(state.blessings or {}) do
 				local blessing = state.blessings[blessing_index]
-				local text = tostring(blessing.text)
 
-				if blessing.tier then
-					text = text .. " " .. blessing.tier
-				end
-
-				pieces[#pieces + 1] = text
+				pieces[#pieces + 1] = tostring(blessing.text)
 			end
 
 			if #pieces > 0 then

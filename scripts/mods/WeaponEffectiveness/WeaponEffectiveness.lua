@@ -24,6 +24,7 @@ local input_state = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffect
 local local_player = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/local_player")
 local hit_marker = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/hit_marker")
 local live_stats = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/live_stats")
+local active_buffs = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/active_buffs")
 local effectiveness_marker_template = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/markers/effectiveness_marker")
 local diagnostics = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/diagnostics")
 
@@ -357,10 +358,8 @@ end
 -- So every string shown is the game's own, and nothing has to be hard-coded.
 --
 -- This reports what is EQUIPPED, not what is currently procced: a conditional
--- blessing ("+X% after a kill") is listed whether or not its condition is met. The
--- live numbers on the stats row are the authoritative answer for what is active
--- right now.
-local TRAIT_TIERS = { "I", "II", "III", "IV" }
+-- blessing ("+X% after a kill") is listed whether or not its condition is met. What
+-- is running right now is the buff row's job.
 
 -- Returns the blessing list plus a small diagnostic table, so an empty row can be
 -- explained from `/wepcheckstate` instead of guessed at.
@@ -442,10 +441,7 @@ local function weapon_blessings(player, slot_name)
 				if ok_text and type(text) == "string" and text ~= "" and text ~= key then
 					info.resolved = info.resolved + 1
 
-					out[#out + 1] = {
-						text = text,
-						tier = TRAIT_TIERS[tonumber(trait.rarity) or 0],
-					}
+					out[#out + 1] = { text = text }
 				else
 					info.unresolved_key = key
 				end
@@ -626,6 +622,15 @@ local function refresh()
 	state.target_name = enemy_display_name(target_info.breed)
 	state.hit_zone_name = target_info.hit_zone_name
 	state.header = header_info(target_info.breed, state.target_name)
+
+	-- Active buffs, read the way the game's own bar reads them. Ours and theirs are
+	-- separate rows because they answer different questions: "what is running on me"
+	-- versus "what have I put on the thing I am aiming at".
+	local ok_player_buffs, player_buffs = pcall(active_buffs.list, player_unit)
+	local ok_target_buffs, target_buffs = pcall(active_buffs.list, target_info.unit)
+
+	state.player_buffs = setting("show_player_buffs", true) ~= false and (ok_player_buffs and player_buffs or {}) or {}
+	state.target_buffs = setting("show_enemy_debuffs", true) ~= false and (ok_target_buffs and target_buffs or {}) or {}
 
 	-- A compact snapshot of everything that had to go right for the indicator to
 	-- show something. /wepcheckstate prints this, so a single in-game test can

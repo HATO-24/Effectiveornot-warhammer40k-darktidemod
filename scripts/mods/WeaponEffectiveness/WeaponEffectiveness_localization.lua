@@ -160,6 +160,36 @@ return {
 		["zh-cn"] = "祝福",
 		["zh-tw"] = "祝福",
 	},
+	player_buffs_label = {
+		en = "Active",
+		["zh-cn"] = "生效中",
+		["zh-tw"] = "生效中",
+	},
+	enemy_debuffs_label = {
+		en = "On target",
+		["zh-cn"] = "目标身上",
+		["zh-tw"] = "目標身上",
+	},
+	show_player_buffs = {
+		en = "Show the buffs running on you",
+		["zh-cn"] = "显示自己身上的增益",
+	},
+	show_player_buffs_desc = {
+		en = "The game's own buff icons for whatever is running on you or your weapon right"
+			.. " now, with the stack count and a bar for the time left. Stays visible even with"
+			.. " nothing under the crosshair, because it is about your weapon, not the target.",
+		["zh-cn"] = "用游戏自己的 buff 图标显示你或武器上此刻生效的增益，带层数与剩余时间进度条。"
+			.. "即使准星没对着敌人也会显示——它描述的是你的武器，不是目标。",
+	},
+	show_enemy_debuffs = {
+		en = "Show the buffs on the aimed enemy",
+		["zh-cn"] = "显示瞄准目标身上的状态",
+	},
+	show_enemy_debuffs_desc = {
+		en = "The same icons for whatever is running on the enemy under the crosshair --"
+			.. " brittle stacks, bleed, burns -- with stacks and a bar for the time left.",
+		["zh-cn"] = "准星下敌人身上生效中的状态（脆弱层数、流血、燃烧等），同样带层数与剩余时间进度条。",
+	},
 	show_blessings = {
 		en = "Show the equipped blessings",
 		["zh-cn"] = "显示已装备的祝福",
