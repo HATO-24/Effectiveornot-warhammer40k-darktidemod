@@ -29,6 +29,16 @@ local diagnostics = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffect
 
 local WeaponTemplate = require("scripts/utilities/weapon/weapon_template")
 
+-- Master item lookup, used to turn a trait (blessing) id into the game's own
+-- localisation key. NOTE: this is a module, not a global -- reading a global named
+-- MasterItems yields nil and, because the failure lands outside any pcall, takes
+-- the whole refresh (and therefore the whole readout) down with it.
+local ok_master_items, MasterItems = pcall(require, "scripts/backend/master_items")
+
+if not ok_master_items or type(MasterItems) ~= "table" then
+	MasterItems = nil
+end
+
 target_module.set_armor_module(armor)
 
 local HUD_ELEMENT_CLASS = "HudElementWeaponEffectiveness"
@@ -352,24 +362,62 @@ end
 -- right now.
 local TRAIT_TIERS = { "I", "II", "III", "IV" }
 
+-- Returns the blessing list plus a small diagnostic table, so an empty row can be
+-- explained from `/wepcheckstate` instead of guessed at.
 local function weapon_blessings(player, slot_name)
 	local out = {}
+	local info = {
+		slot = slot_name,
+		loadout_keys = {},
+		items_with_traits = {},
+	}
 
 	if not player or type(player.profile) ~= "function" or type(slot_name) ~= "string" then
-		return out
+		info.reason = "no player or slot"
+		return out, info
+	end
+
+	if not MasterItems or type(MasterItems.get_item) ~= "function" then
+		info.reason = "master items module unavailable"
+		return out, info
 	end
 
 	local ok_profile, profile = pcall(player.profile, player)
 
 	if not ok_profile or type(profile) ~= "table" or type(profile.loadout) ~= "table" then
-		return out
+		info.reason = "profile has no loadout"
+		return out, info
 	end
 
-	local item = profile.loadout[slot_name]
+	local loadout = profile.loadout
 
-	if type(item) ~= "table" or type(item.traits) ~= "table" then
-		return out
+	for key, value in pairs(loadout) do
+		if type(key) == "string" then
+			info.loadout_keys[#info.loadout_keys + 1] = key
+
+			if type(value) == "table" and type(value.traits) == "table" and #value.traits > 0 then
+				info.items_with_traits[#info.items_with_traits + 1] = key
+			end
+		end
 	end
+
+	table.sort(info.loadout_keys)
+	table.sort(info.items_with_traits)
+
+	local item = loadout[slot_name]
+
+	if type(item) ~= "table" then
+		info.reason = "no item in that slot"
+		return out, info
+	end
+
+	if type(item.traits) ~= "table" then
+		info.reason = "item has no traits field"
+		return out, info
+	end
+
+	info.traits = #item.traits
+	info.resolved = 0
 
 	for i = 1, #item.traits do
 		local trait = item.traits[i]
@@ -392,16 +440,24 @@ local function weapon_blessings(player, slot_name)
 				-- An unresolved key comes back as the key itself; showing that would
 				-- just be noise, so it is skipped.
 				if ok_text and type(text) == "string" and text ~= "" and text ~= key then
+					info.resolved = info.resolved + 1
+
 					out[#out + 1] = {
 						text = text,
 						tier = TRAIT_TIERS[tonumber(trait.rarity) or 0],
 					}
+				else
+					info.unresolved_key = key
 				end
 			end
 		end
 	end
 
-	return out
+	if info.resolved == 0 then
+		info.reason = info.reason or "traits did not resolve to localised names"
+	end
+
+	return out, info
 end
 
 -- ----------------------------------------------------------------- refresh --
@@ -472,16 +528,37 @@ local function refresh()
 
 	-- The player's own damage bonuses, read live. Downstream code treats this as
 	-- optional: when it is unavailable the readout is exactly the armour-table one.
+	-- The optional layers are isolated from each other and from the core readout:
+	-- a failure in one of them must never blank the whole indicator. That is not
+	-- hypothetical -- a nil MasterItems inside the blessing lookup did exactly that,
+	-- so each extra is pcall'd and degrades to "not shown".
 	local player = local_player.player()
-	local snapshot = live_stats.snapshot(player_unit, player, is_ranged)
+	local ok_stats, snapshot = pcall(live_stats.snapshot, player_unit, player, is_ranged)
+
+	if not ok_stats or type(snapshot) ~= "table" then
+		diagnostics.log("live stats unavailable (%s); numbers fall back to the armour table", tostring(snapshot))
+		snapshot = { available = false }
+	end
 
 	if setting("use_live_stats", true) == false then
 		snapshot = { available = false }
 	end
 
 	state.live_stats = snapshot
-	state.live_panel = setting("show_live_stats_panel", true) ~= false and live_stats.panel_lines(snapshot) or {}
-	state.blessings = setting("show_blessings", true) ~= false and weapon_blessings(player, wielded_slot) or {}
+
+	local ok_panel, panel = pcall(live_stats.panel_lines, snapshot)
+
+	state.live_panel = setting("show_live_stats_panel", true) ~= false and (ok_panel and panel or {}) or {}
+
+	local ok_blessings, blessings, blessing_info = pcall(weapon_blessings, player, wielded_slot)
+
+	if not ok_blessings then
+		diagnostics.log("blessing lookup failed (%s); the row is skipped", tostring(blessings))
+		blessing_info = { reason = tostring(blessings) }
+	end
+
+	state.blessing_info = blessing_info
+	state.blessings = setting("show_blessings", true) ~= false and (ok_blessings and blessings or {}) or {}
 
 	mod._weapon_dump = {
 		template_name = weapon_template and weapon_template.name,
@@ -583,6 +660,8 @@ local function refresh()
 			-- a surprising total explains itself from this alone.
 			raw = snapshot.raw,
 		},
+		-- Why the blessing row says what it says (or nothing at all).
+		blessings = state.blessing_info,
 		input_action_one_hold = input_state.is_held("action_one_hold"),
 		player = local_player.debug(),
 	}
@@ -1112,8 +1191,7 @@ mod:command("wepcheckstate", "Report what the indicator currently sees, and why 
 	-- the base it is neutral at, and the delta actually applied.
 	local live = probe.live_stats
 
-	if live then
-		mod:echo(string.format(
+	if live then		mod:echo(string.format(
 			"  live: available=%s rending=%+.3f weakspot=%+.3f finesse=%+.3f crit=%s x%.2f",
 			tostring(live.available),
 			tonumber(live.rending) or 0,
@@ -1143,6 +1221,27 @@ mod:command("wepcheckstate", "Report what the indicator currently sees, and why 
 				tonumber(entry.delta) or 0
 			))
 		end
+	end
+
+	-- The blessing row can be empty for several different reasons, so it says which
+	-- one: the slot being held, how many traits the item has, how many resolved to a
+	-- localised name, and what else the loadout offers.
+	local blessing = probe.blessings
+
+	if blessing then
+		mod:echo(string.format(
+			"  blessings: slot=%s traits=%s resolved=%s reason=%s unresolved_key=%s",
+			tostring(blessing.slot),
+			tostring(blessing.traits),
+			tostring(blessing.resolved),
+			tostring(blessing.reason),
+			tostring(blessing.unresolved_key)
+		))
+		mod:echo(string.format(
+			"    loadout keys=[%s]  keys with traits=[%s]",
+			table.concat(blessing.loadout_keys or {}, ", "),
+			table.concat(blessing.items_with_traits or {}, ", ")
+		))
 	end
 
 	-- The body-part resolution is the part most likely to fail silently, so it gets

@@ -15,6 +15,10 @@ const luaparse = require('luaparse');
 const root = process.argv[2];
 
 // Globals the game's Lua environment provides and the mod intentionally uses.
+//
+// Do not whitelist a name just to make this check pass. It flagged MasterItems
+// once, and the right answer was `require("scripts/backend/master_items")` -- the
+// whitelist entry would have hidden a bug that blanked the whole readout in game.
 const ALLOWED = new Set([
 	'_G', 'print', 'pairs', 'ipairs', 'type', 'tostring', 'tonumber', 'select',
 	'pcall', 'xpcall', 'error', 'assert', 'require', 'rawget', 'rawset',
@@ -28,9 +32,6 @@ const ALLOWED = new Set([
 	'fassert', 'Fassert', 'Raycast', 'HudElementBase', 'ScriptUnit_extension',
 	'Wwise', 'Profiler', 'DumpedTable', 'Awake', 'Vector3Box', 'Vector3BoxNew',
 	'UIFontSettings',
-	// Master item lookup, used to resolve trait (blessing) ids to the game's own
-	// localisation keys.
-	'MasterItems',
 ]);
 
 const files = [];
