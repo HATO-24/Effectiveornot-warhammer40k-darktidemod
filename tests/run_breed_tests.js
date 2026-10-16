@@ -154,6 +154,94 @@ local tail_breed = {
 local bz_tail = armor.best_zone(flat_profile({ armored = 1.0 }), tail_breed, false, nil)
 check("non-actionable-only breed falls back to its zones", bz_tail, "upper_tail")
 
+-- Weakspots come from the breed's own hit_zone_weakspot_types. They are marked
+-- in the readout, never priced into the number: the extra damage depends on the
+-- attacker's finesse bonuses, which are not part of the armour table.
+local ws_breed = {
+	name = "ws_test",
+	armor_type = "armored",
+	hitzone_armor_override = { head = "super_armor" },
+	hit_zone_weakspot_types = { head = "headshot" },
+	hit_zones = {
+		{ actors = { "c_head" }, name = "head" },
+		{ actors = { "c_hips" }, name = "torso" },
+	},
+}
+local ws_zones = armor.zones_with_armor(ws_breed, true)
+check("head carries its weakspot type", ws_zones[1] and ws_zones[1].weakspot, "headshot")
+check("torso is not a weakspot", ws_zones[2] and ws_zones[2].weakspot, nil)
+
+local breeds_with_weakspot = 0
+for _, breed in pairs(bundle.breeds) do
+	local zs = armor.zones_with_armor(breed, true)
+	for i = 1, #zs do
+		if zs[i].weakspot then
+			breeds_with_weakspot = breeds_with_weakspot + 1
+
+			break
+		end
+	end
+end
+check("most real breeds expose a weakspot part", breeds_with_weakspot >= 40, true)
+
+-- The hound's weakspot is its tail, which is deliberately not an "actionable"
+-- part: it must still be present in the full zone list.
+local hound_tail_ws = nil
+local hound = bundle.breeds["chaos_armored_hound"]
+if hound then
+	local all = armor.zones_with_armor(hound, false)
+	for i = 1, #all do
+		if all[i].zone == "hound_tail" then
+			hound_tail_ws = all[i].weakspot
+		end
+	end
+end
+check("hound tail is a weakspot in the data", hound_tail_ws, "weakspot")
+
+-- Coverage: every zone name the real breed data mentions must exist in the
+-- display order, or it is silently dropped from the readout. hound_tail was
+-- missing once, which is how the hound's weakspot stopped being reported.
+local known_zones = {}
+for i = 1, #armor.ZONE_ORDER do
+	known_zones[armor.ZONE_ORDER[i]] = true
+end
+
+local dropped = {}
+for bname, breed in pairs(bundle.breeds) do
+	local mentioned = {}
+	local zones = breed.hit_zones
+	if type(zones) == "table" then
+		for _, zone in pairs(zones) do
+			if type(zone) == "table" and type(zone.name) == "string" then
+				mentioned[zone.name] = true
+			end
+		end
+	end
+	for source in pairs({ breed.hitzone_armor_override, breed.hit_zone_weakspot_types }) do
+		if type(source) == "table" then
+			for zone_name in pairs(source) do
+				if type(zone_name) == "string" then
+					mentioned[zone_name] = true
+				end
+			end
+		end
+	end
+	for zone_name in pairs(mentioned) do
+		if not known_zones[zone_name] then
+			dropped[#dropped + 1] = tostring(bname) .. ":" .. zone_name
+		end
+	end
+end
+
+table.sort(dropped)
+if #dropped > 8 then
+	-- Only a few at a time; the count is the assertion.
+	local trimmed = {}
+	for i = 1, 8 do trimmed[i] = dropped[i] end
+	print("   !! zones missing from ZONE_ORDER: " .. table.concat(trimmed, ", "))
+end
+check("no real zone is missing from ZONE_ORDER", #dropped, 0)
+
 local nozones = { name = "nozones", armor_type = "berserker" }
 local bz4, ba4, bm4 = armor.best_zone(flat_profile({ berserker = 0.75 }), nozones, false, nil)
 check("no zones -> nil zone", bz4, nil)

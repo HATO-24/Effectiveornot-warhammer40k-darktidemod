@@ -69,6 +69,8 @@ class Parser:
         c = self.peek()
         if c == "{":
             return self.table()
+        if c == "[":
+            return self.array()
         if c == '"':
             return self.read_string()
         if c == "<":
@@ -90,6 +92,29 @@ class Parser:
                 return float(tok)
             return int(tok)
         self.error("unexpected value")
+
+    def array(self):
+        """The dump mixes JSON arrays in with Lua tables, e.g. `"key":["a","b"]`."""
+        assert self.s[self.i] == "["
+        self.i += 1
+        out = []
+        while True:
+            self.ws()
+            c = self.peek()
+            if c == "":
+                self.error("unterminated array")
+            if c == "]":
+                self.i += 1
+                return out
+            out.append(self.value())
+            self.ws()
+            if self.peek() == ",":
+                self.i += 1
+                continue
+            if self.peek() == "]":
+                self.i += 1
+                return out
+            self.error("expected , or ] in array")
 
     def table(self):
         assert self.s[self.i] == "{"
@@ -115,10 +140,13 @@ class Parser:
                     self.error("expected ]")
                 self.i += 1
                 self.ws()
-                if self.peek() != "=":
-                    self.error("expected = after [key]")
-                self.i += 1
-                out[key] = self.value()
+                if self.peek() == "=":
+                    self.i += 1
+                    out[key] = self.value()
+                else:
+                    # `{ ["name"], other = 1 }` is a positional value, not a key.
+                    out[positional] = key
+                    positional += 1
                 handled = True
             elif c == '"':
                 key = self.read_string()
@@ -189,6 +217,14 @@ def emit(value, out):
             out.append(lua_key(k))
             out.append("=")
             emit(v, out)
+        out.append("}")
+    elif isinstance(value, (list, tuple)):
+        # JSON arrays in the dump become plain Lua sequence tables.
+        out.append("{")
+        for index, item in enumerate(value):
+            if index:
+                out.append(",")
+            emit(item, out)
         out.append("}")
     else:
         raise TypeError(type(value))

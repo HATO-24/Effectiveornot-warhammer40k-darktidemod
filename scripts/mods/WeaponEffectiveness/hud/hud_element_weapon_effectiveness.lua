@@ -147,17 +147,43 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 		end
 	end
 
-	-- Header: who is under the crosshair, and its armour. The body part is no
-	-- longer printed here -- the aimed part could not be resolved reliably, so each
-	-- attack row carries the part instead.
+	-- Header: who is under the crosshair, and how its parts are armoured. The
+	-- aimed part is not printed -- that could not be resolved reliably -- so the
+	-- header describes the enemy and each attack row says where to hit it.
+	local header = state.header or {}
 	local header_parts = {}
 
-	if state.target_name and state.target_name ~= "" then
-		header_parts[#header_parts + 1] = state.target_name
+	if header.name and header.name ~= "" then
+		header_parts[#header_parts + 1] = header.name
 	end
 
-	if mod:get("show_armor_name") ~= false and state.armor_label and state.armor_label ~= "" then
-		header_parts[#header_parts + 1] = state.armor_label
+	if mod:get("show_armor_name") ~= false then
+		if header.parts and #header.parts > 0 then
+			-- Parts differ in armour: name each one.
+			for index = 1, #header.parts do
+				local part = header.parts[index]
+				local text = localize(part.zone_key)
+
+				if part.armor and part.armor ~= "" then
+					text = text .. " " .. part.armor
+				end
+
+				if part.weakspot then
+					text = text .. localize("zone_weakspot_suffix")
+				end
+
+				header_parts[#header_parts + 1] = text
+			end
+		elseif header.armor and header.armor ~= "" then
+			-- One armour everywhere: name it once, then flag the weakspot parts.
+			local text = header.armor
+
+			for index = 1, #(header.weakspot_zones or {}) do
+				text = text .. " · " .. localize(header.weakspot_zones[index]) .. localize("zone_weakspot_suffix")
+			end
+
+			header_parts[#header_parts + 1] = text
+		end
 	end
 
 	if state.has_special and state.special_active then
@@ -191,8 +217,14 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 
 			-- The value is "where to hit · how hard": the body part this attack
 			-- wants, and the armour multiplier it gets there. The verdict itself is
-			-- carried by the colour, so it does not need to be spelled out.
+			-- carried by the colour, so it does not need to be spelled out. A part
+			-- that is a weakspot is flagged, because the multiplier shown is the
+			-- armour table only and ignores the build's finesse bonuses.
 			local value = line.zone_key and localize(line.zone_key) or ""
+
+			if line.zone_weakspot then
+				value = value .. localize("zone_weakspot_suffix")
+			end
 
 			if show_multiplier and type(line.max) == "number" then
 				value = (value ~= "" and (value .. "  ·  ") or "") .. string.format("x%.2f", line.max)

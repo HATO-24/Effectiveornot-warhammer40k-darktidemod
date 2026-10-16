@@ -400,6 +400,7 @@ local ZONE_ORDER = {
 	"shield",
 	"corruptor_armor",
 	"backpack",
+	"canister",
 	"tentacle",
 	"weakspot",
 	"right_shoulderguard",
@@ -407,7 +408,13 @@ local ZONE_ORDER = {
 	"tongue",
 	"upper_tail",
 	"lower_tail",
+	"hound_tail",
 }
+
+-- Exposed so the test suite can assert that no zone present in the real breed
+-- data is silently missing from this list (hound_tail was missing once, and the
+-- hound's weakspot quietly stopped being reported).
+armor.ZONE_ORDER = ZONE_ORDER
 
 -- The parts a player can actually choose between. Suggesting "lower left arm"
 -- is not advice anyone can act on mid-fight -- the real decision is head or body
@@ -436,6 +443,7 @@ function armor.zones_with_armor(breed, actionable_only)
 	end
 
 	local override = breed.hitzone_armor_override
+	local weakspot_types = breed.hit_zone_weakspot_types
 	local known = {}
 
 	-- Every zone the breed's own hit_zones table names...
@@ -470,6 +478,11 @@ function armor.zones_with_armor(breed, actionable_only)
 			zones[#zones + 1] = {
 				zone = zone_name,
 				armor = armor_type,
+				-- "headshot" / "weakspot" / nil. The game multiplies damage against
+				-- these parts by the attacker's finesse bonuses, which are
+				-- character-specific and therefore not in the armour table -- so the
+				-- readout marks them instead of trying to price them in.
+				weakspot = type(weakspot_types) == "table" and weakspot_types[zone_name] or nil,
 			}
 		end
 	end

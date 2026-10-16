@@ -281,6 +281,69 @@ local function special_active_of(player_unit, action_component)
 	return nil, slot, slot_component
 end
 
+-- What the header line shows: who is under the crosshair, and how its parts are
+-- armoured.
+--
+-- Two shapes, because one of them is noise on most enemies:
+--   * parts differ  -> list each part with its armour (`头部 硬壳(弱点) · 躯干 防弹`)
+--   * parts equal   -> name the armour once and only call out the weakspot parts
+--                      (`喷火兵 · 狂怒甲 · 头部(弱点)`)
+--
+-- Weakspots are marked, not priced: the game multiplies damage on those parts by
+-- the attacker's finesse bonuses (`finesse_boost` per armour type in the weapon
+-- data), which are character-specific and cannot be read from an armour table.
+local function header_info(breed, name)
+	if type(breed) ~= "table" then
+		return { name = name }
+	end
+
+	local zones = armor.zones_with_armor(breed, true)
+	local parts = {}
+	local weakspot_zones = {}
+	local seen_armor = {}
+	local first_armor = nil
+	local uniform = true
+
+	for i = 1, #zones do
+		local zone = zones[i]
+
+		if zone.weakspot then
+			weakspot_zones[#weakspot_zones + 1] = "zone_" .. zone.zone
+		end
+
+		if first_armor == nil then
+			first_armor = zone.armor
+		elseif zone.armor ~= first_armor then
+			uniform = false
+		end
+
+		if zone.armor and not seen_armor[zone.armor] then
+			seen_armor[zone.armor] = true
+
+			parts[#parts + 1] = {
+				zone_key = "zone_" .. zone.zone,
+				armor = armor.display_name(zone.armor),
+				weakspot = zone.weakspot ~= nil,
+			}
+		end
+	end
+
+	if uniform then
+		-- One armour everywhere: name it once, then just flag the weakspot parts.
+		return {
+			name = name,
+			armor = armor.display_name(breed.armor_type),
+			weakspot_zones = weakspot_zones,
+		}
+	end
+
+	return {
+		name = name,
+		parts = parts,
+		weakspot_zones = weakspot_zones,
+	}
+end
+
 -- ----------------------------------------------------------------- refresh --
 
 -- The aimed enemy's name. Every breed carries `display_name` as a vanilla loc key
@@ -412,6 +475,7 @@ local function refresh()
 	state.armor_label = target_info.armor_type and armor.display_name(target_info.armor_type) or nil
 	state.target_name = enemy_display_name(target_info.breed)
 	state.hit_zone_name = target_info.hit_zone_name
+	state.header = header_info(target_info.breed, state.target_name)
 
 	-- A compact snapshot of everything that had to go right for the indicator to
 	-- show something. /wepcheckstate prints this, so a single in-game test can
@@ -530,17 +594,20 @@ local function refresh()
 		-- in armour. On a breed where they are all the same, "全身" is the honest
 		-- answer -- and it keeps every row the same shape.
 		local zone_key = "zone_whole_body"
+		local zone_weakspot = false
 
 		if best_zone then
 			local zones = armor.zones_with_armor(target_info.breed, true)
 			local first_armor = zones[1] and zones[1].armor
 			local uniform = true
 
-			for i = 2, #zones do
+			for i = 1, #zones do
 				if zones[i].armor ~= first_armor then
 					uniform = false
+				end
 
-					break
+				if zones[i].zone == best_zone and zones[i].weakspot then
+					zone_weakspot = true
 				end
 			end
 
@@ -558,6 +625,9 @@ local function refresh()
 			zone = best_zone,
 			zone_armor = best_armor,
 			zone_key = zone_key,
+			-- The armour-table number ignores the weakspot multiplier, so the part
+			-- is flagged: the player's own build decides how much that adds.
+			zone_weakspot = zone_weakspot,
 			active = is_active and true or false,
 		}
 	end

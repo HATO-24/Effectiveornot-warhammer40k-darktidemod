@@ -15,9 +15,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lua_dump_parser import Parser, emit  # noqa: E402
 
 SRC = r"mods\DshProbe\out\breeds.json"
-OUT = r"C:\Users\ASUS\AppData\Local\Temp\breeds_bundle.lua"
+OUT = r"mods\WeaponEffectiveness\tests\bundles\breeds_bundle.lua"
 
-KEEP = ("armor_type", "hitzone_armor_override", "hit_zones")
+KEEP = ("armor_type", "hitzone_armor_override", "hit_zones", "hit_zone_weakspot_types",
+        "display_name", "name")
 
 
 def reduce_breed(body):
@@ -25,7 +26,32 @@ def reduce_breed(body):
     for key in KEEP:
         if key in body:
             out[key] = body[key]
+
+    # The dump is JSON-ish, so sequence tables (hit_zones) arrive as arrays.
+    # Normalise them to Lua sequence tables with INTEGER keys -- string keys would
+    # emit as ["1"] and leave #hit_zones at 0, which silently disables every
+    # array-style iteration in the Lua under test.
+    zones = out.get("hit_zones")
+    if isinstance(zones, list):
+        out["hit_zones"] = {i + 1: z for i, z in enumerate(zones)}
     return out
+
+
+def _ordered_zone_keys(keys):
+    """Numeric keys first, in numeric order, then the rest alphabetically."""
+    def sort_key(key):
+        text = str(key)
+        return (0, int(text), "") if text.isdigit() else (1, 0, text)
+
+    return sorted(keys, key=sort_key)
+
+
+def _actor_names(actors):
+    if isinstance(actors, dict):
+        return [v for v in actors.values() if isinstance(v, str)]
+    if isinstance(actors, list):
+        return [v for v in actors if isinstance(v, str)]
+    return []
 
 
 def expectations(breed):
@@ -42,17 +68,12 @@ def expectations(breed):
     if not isinstance(zones, dict):
         return {}
 
-    ordered = [zones[k] for k in sorted(zones.keys(), key=lambda x: (isinstance(x, str), x))
+    ordered = [zones[k] for k in _ordered_zone_keys(zones.keys())
                if isinstance(zones[k], dict)]
 
     for zone in ordered:
-        actors = zone.get("actors")
         zone_name = zone.get("name")
-        if not isinstance(actors, dict):
-            continue
-        for actor in actors.values():
-            if not isinstance(actor, str):
-                continue
+        for actor in _actor_names(zone.get("actors")):
             entry = seen.setdefault(actor, {"first_zone": None, "override_zone": None})
             if entry["first_zone"] is None:
                 entry["first_zone"] = zone_name
@@ -81,10 +102,11 @@ def keyed_actors(breed):
         if not isinstance(zone, dict):
             converted[index] = zone
             continue
-        actors = zone.get("actors")
-        if isinstance(actors, dict):
+        names = _actor_names(zone.get("actors"))
+        if names:
             new_zone = dict(zone)
-            new_zone["actors"] = {name: True for name in actors.values() if isinstance(name, str)}
+            # The other representation the game may use: a set keyed by name.
+            new_zone["actors"] = {name: True for name in names}
             converted[index] = new_zone
         else:
             converted[index] = zone
@@ -112,8 +134,8 @@ def main():
             continue
         seen = {}
         for zone in zones.values():
-            if isinstance(zone, dict) and isinstance(zone.get("actors"), dict):
-                for actor in zone["actors"].values():
+            if isinstance(zone, dict):
+                for actor in _actor_names(zone.get("actors")):
                     seen[actor] = seen.get(actor, 0) + 1
         multi_zone += sum(1 for v in seen.values() if v > 1)
 
