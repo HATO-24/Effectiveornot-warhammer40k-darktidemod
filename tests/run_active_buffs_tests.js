@@ -126,7 +126,7 @@ check("a buff whose template raises is skipped", #bad_template, 1)
 check("and the rest still resolve", bad_template[1] and bad_template[1].template_name, "fine")
 
 print("")
-print("== summary line ==")
+print("== summary line: only what can be named ==")
 local names = { adamant_crit_chance_on_kill_effect = "Energy Cycle" }
 check("resolved name, stacks and seconds", active_buffs.summary(
 	{ { template_name = "adamant_crit_chance_on_kill_effect", stacks = 3, remaining = 4.2 } }, 4, names
@@ -137,19 +137,28 @@ check("a stack of 1 is not printed", active_buffs.summary(
 check("a permanent buff shows no seconds", active_buffs.summary(
 	{ { template_name = "adamant_crit_chance_on_kill_effect", stacks = 2 } }, 4, names
 ), "Energy Cycle x2")
-check("an unnamed buff falls back to its own id, opened up", active_buffs.summary(
-	{ { template_name = "some_buff_name", stacks = 1 } }, 4, names
-), "some buff name")
+
+-- An unnamed buff must never print its internal id. This is the regression that put
+-- "veteran toughness on elite kill effect" across the HUD.
+check("an unnamed buff is counted, not printed", active_buffs.summary(
+	{ { template_name = "veteran_toughness_on_elite_kill_effect" }, { template_name = "adamant_crit_chance_on_kill_effect" } },
+	4, names
+), "Energy Cycle  +1")
+check("nothing nameable -> only the count", active_buffs.summary(
+	{ { template_name = "some_internal_id" } }, 4, {}
+), "+1")
 check("limit is respected", active_buffs.summary(
-	{ { template_name = "a" }, { template_name = "b" }, { template_name = "c" } }, 2, {}
-), "a  ·  b")
+	{ { template_name = "a" }, { template_name = "b" }, { template_name = "c" } }, 2, { a = "A" }
+), "A  +1")
 check("nothing -> empty", active_buffs.summary({}, 4, {}), "")
 
 print("")
-print("== display_name ==")
-check("a known buff gets its blessing name", active_buffs.display_name({ template_name = "x" }, { x = "Name" }), "Name")
-check("an unknown one keeps the template id", active_buffs.display_name({ template_name = "x_y" }, {}), "x y")
-check("an empty mapping is treated as unknown", active_buffs.display_name({ template_name = "x" }, { x = "" }), "x")
+print("== resolved_name / display_name ==")
+check("a known buff resolves", active_buffs.resolved_name({ template_name = "x" }, { x = "Name" }), "Name")
+check("an unknown one does not", active_buffs.resolved_name({ template_name = "x" }, {}), nil)
+check("an empty mapping counts as unknown", active_buffs.resolved_name({ template_name = "x" }, { x = "" }), nil)
+check("display_name still falls back to the id", active_buffs.display_name({ template_name = "x_y" }, {}), "x y")
+check("display_name prefers the resolved one", active_buffs.display_name({ template_name = "x" }, { x = "Name" }), "Name")
 check("a missing template name is safe", active_buffs.display_name({}, {}), "?")
 check("nil entries are safe", active_buffs.display_name(nil, nil), "?")
 

@@ -130,18 +130,12 @@ function active_buffs.list(unit)
 	return out
 end
 
--- The one-line summary a text row can carry, e.g. "Rending Shockwave x3 4s  x1".
---
--- `names` maps a buff template name to a localised name. Buff templates carry no
--- display_name of their own (checked across all 2656 of them), so the caller
--- supplies what it knows -- the wielded weapon's blessings, whose master items do
--- list the buffs they apply. Anything still unnamed falls back to the template's own
--- id with the underscores opened up, which is at least the game's own word for it.
-function active_buffs.display_name(entry, names)
+-- The localised name for a buff, or nil when nothing could resolve one.
+function active_buffs.resolved_name(entry, names)
 	local template_name = entry and entry.template_name
 
 	if type(template_name) ~= "string" then
-		return "?"
+		return nil
 	end
 
 	local named = type(names) == "table" and names[template_name] or nil
@@ -150,28 +144,63 @@ function active_buffs.display_name(entry, names)
 		return named
 	end
 
+	return nil
+end
+
+-- Kept for callers that want *something* to print rather than nothing.
+function active_buffs.display_name(entry, names)
+	local resolved = active_buffs.resolved_name(entry, names)
+
+	if resolved then
+		return resolved
+	end
+
+	local template_name = entry and entry.template_name
+
+	if type(template_name) ~= "string" then
+		return "?"
+	end
+
 	return (string.gsub(template_name, "_", " "))
 end
 
+-- The one-line summary a text row can carry, e.g. "Energy Cycle x3 4s".
+--
+-- Only buffs that could be NAMED are listed. Buff templates carry no display_name
+-- of their own (checked across all 2656 of them), so a buff granted by a talent we
+-- have no name for would otherwise print its internal id -- "veteran toughness on
+-- elite kill effect" -- which is worse than useless on a HUD. The unnamed ones are
+-- counted instead, as "+2", so nothing disappears silently.
 function active_buffs.summary(entries, limit, names)
 	local pieces = {}
+	local unnamed = 0
 
 	for i = 1, math.min(#(entries or {}), limit or 4) do
 		local entry = entries[i]
-		local text = active_buffs.display_name(entry, names)
+		local text = active_buffs.resolved_name(entry, names)
 
-		if (entry.stacks or 1) > 1 then
-			text = text .. " x" .. tostring(entry.stacks)
+		if not text then
+			unnamed = unnamed + 1
+		else
+			if (entry.stacks or 1) > 1 then
+				text = text .. " x" .. tostring(entry.stacks)
+			end
+
+			if entry.remaining then
+				text = text .. string.format(" %.0fs", entry.remaining)
+			end
+
+			pieces[#pieces + 1] = text
 		end
-
-		if entry.remaining then
-			text = text .. string.format(" %.0fs", entry.remaining)
-		end
-
-		pieces[#pieces + 1] = text
 	end
 
-	return table.concat(pieces, "  ·  ")
+	local line = table.concat(pieces, "  ·  ")
+
+	if unnamed > 0 then
+		line = (line ~= "" and (line .. "  ") or "") .. "+" .. tostring(unnamed)
+	end
+
+	return line
 end
 
 return active_buffs
