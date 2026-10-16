@@ -127,10 +127,31 @@ check("and the rest still resolve", bad_template[1] and bad_template[1].template
 
 print("")
 print("== summary line ==")
-check("stacks and seconds", active_buffs.summary({ { stacks = 3, remaining = 4.2 }, { stacks = 1 } }), "x3 4s  x1")
-check("permanent entries have no seconds", active_buffs.summary({ { stacks = 2 } }), "x2")
-check("limit is respected", active_buffs.summary({ { stacks = 1 }, { stacks = 2 }, { stacks = 3 } }, 2), "x1  x2")
-check("nothing -> empty", active_buffs.summary({}), "")
+local names = { adamant_crit_chance_on_kill_effect = "Energy Cycle" }
+check("resolved name, stacks and seconds", active_buffs.summary(
+	{ { template_name = "adamant_crit_chance_on_kill_effect", stacks = 3, remaining = 4.2 } }, 4, names
+), "Energy Cycle x3 4s")
+check("a stack of 1 is not printed", active_buffs.summary(
+	{ { template_name = "adamant_crit_chance_on_kill_effect", stacks = 1, remaining = 2 } }, 4, names
+), "Energy Cycle 2s")
+check("a permanent buff shows no seconds", active_buffs.summary(
+	{ { template_name = "adamant_crit_chance_on_kill_effect", stacks = 2 } }, 4, names
+), "Energy Cycle x2")
+check("an unnamed buff falls back to its own id, opened up", active_buffs.summary(
+	{ { template_name = "some_buff_name", stacks = 1 } }, 4, names
+), "some buff name")
+check("limit is respected", active_buffs.summary(
+	{ { template_name = "a" }, { template_name = "b" }, { template_name = "c" } }, 2, {}
+), "a  ·  b")
+check("nothing -> empty", active_buffs.summary({}, 4, {}), "")
+
+print("")
+print("== display_name ==")
+check("a known buff gets its blessing name", active_buffs.display_name({ template_name = "x" }, { x = "Name" }), "Name")
+check("an unknown one keeps the template id", active_buffs.display_name({ template_name = "x_y" }, {}), "x y")
+check("an empty mapping is treated as unknown", active_buffs.display_name({ template_name = "x" }, { x = "" }), "x")
+check("a missing template name is safe", active_buffs.display_name({}, {}), "?")
+check("nil entries are safe", active_buffs.display_name(nil, nil), "?")
 
 print("")
 print(string.format("%d checks, %d failures", checks, failures))

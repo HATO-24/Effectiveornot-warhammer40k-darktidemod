@@ -2,6 +2,7 @@ local mod = get_mod("WeaponEffectiveness")
 
 local Definitions = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/hud/hud_element_weapon_effectiveness_definitions")
 local Settings = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/hud/hud_element_weapon_effectiveness_settings")
+local active_buffs_ui = mod:io_dofile("WeaponEffectiveness/scripts/mods/WeaponEffectiveness/modules/active_buffs")
 
 local HudElementWeaponEffectiveness = class("HudElementWeaponEffectiveness", "HudElementBase")
 
@@ -116,34 +117,16 @@ local function set_row(self, row, label, value, color, visible)
 	end
 end
 
--- Fills one of the icon rows: `entries` come from modules/active_buffs, one slot
--- each, with the progress bar drawn from the remaining fraction.
-local function set_buff_row(self, row, entries, label)
-	local widget = self._widgets_by_name[WIDGET]
+-- The buff rows are text: names, stacks and seconds, resolved through whatever the
+-- caller could name (see active_buffs.display_name).
+local function set_buff_row(self, row, entries, names, label)
+	if #entries == 0 then
+		set_row(self, row, "", "", nil, false)
 
-	if not widget then
 		return
 	end
 
-	for slot = 1, BUFF_SLOTS do
-		local id = row .. "_" .. slot
-		local entry = entries[slot]
-
-		if entry then
-			widget.content[id] = entry.icon
-			widget.content[id .. "_progress"] = entry.progress
-			-- Like the native bar: the numeral only appears when it means something.
-			widget.content[id .. "_stacks"] = (entry.stacks or 1) > 1 and ("x" .. tostring(entry.stacks)) or ""
-			widget.content[id .. "_time"] = entry.remaining and string.format("%.0fs", entry.remaining) or ""
-		else
-			widget.content[id] = nil
-			widget.content[id .. "_progress"] = nil
-			widget.content[id .. "_stacks"] = ""
-			widget.content[id .. "_time"] = ""
-		end
-	end
-
-	set_row(self, row, label, "", nil, label ~= nil and label ~= "")
+	set_row(self, row, label, active_buffs_ui.summary(entries, BUFF_SLOTS, names), mod.neutral_color(), true)
 end
 
 HudElementWeaponEffectiveness.on_resolution_modified = function(self)
@@ -205,7 +188,13 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 	end
 
 	if player_buff_count > 0 then
-		set_buff_row(self, PLAYER_BUFFS_ROW, state.player_buffs, localize(ATTACK_LOC[PLAYER_BUFFS_ROW]))
+		set_buff_row(
+			self,
+			PLAYER_BUFFS_ROW,
+			state.player_buffs,
+			state.buff_names,
+			localize(ATTACK_LOC[PLAYER_BUFFS_ROW])
+		)
 	end
 
 	if not has_target then
@@ -263,16 +252,11 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 		local row = ROWS[index]
 		local line = lines_by_kind[row]
 
-		-- The icon rows: one slot per live buff, drawn from the game's own buff
-		-- icons (see modules/active_buffs).
+		-- The buff rows name what is running, with stacks and seconds left.
 		if row == PLAYER_BUFFS_ROW then
-			local entries = state.player_buffs or {}
-
-			set_buff_row(self, row, entries, #entries > 0 and localize(ATTACK_LOC[row]) or "")
+			set_buff_row(self, row, state.player_buffs or {}, state.buff_names, localize(ATTACK_LOC[row]))
 		elseif row == ENEMY_BUFFS_ROW then
-			local entries = state.target_buffs or {}
-
-			set_buff_row(self, row, entries, #entries > 0 and localize(ATTACK_LOC[row]) or "")
+			set_buff_row(self, row, state.target_buffs or {}, state.buff_names, localize(ATTACK_LOC[row]))
 		-- The live panel is its own row: read straight from the composed stats.
 		elseif row == STATS_ROW then
 			local panel = state.live_panel or {}

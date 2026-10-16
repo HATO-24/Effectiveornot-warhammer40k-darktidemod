@@ -369,6 +369,9 @@ local function weapon_blessings(player, slot_name)
 		slot = slot_name,
 		loadout_keys = {},
 		items_with_traits = {},
+		-- buff template name -> the blessing's localised name, so the live buff rows
+		-- can say "能量循环" instead of "adamant_crit_chance_on_kill_effect".
+		buff_names = {},
 	}
 
 	if not player or type(player.profile) ~= "function" or type(slot_name) ~= "string" then
@@ -442,6 +445,19 @@ local function weapon_blessings(player, slot_name)
 					info.resolved = info.resolved + 1
 
 					out[#out + 1] = { text = text }
+
+					-- A blessing's master item lists the buff templates it applies, which
+					-- is the only place a buff gets a human name: buff templates have no
+					-- display_name of their own (checked across all 2656 of them).
+					local buffs = type(master) == "table" and master.buffs or nil
+
+					if type(buffs) == "table" then
+						for buff_name in pairs(buffs) do
+							if type(buff_name) == "string" then
+								info.buff_names[buff_name] = text
+							end
+						end
+					end
 				else
 					info.unresolved_key = key
 				end
@@ -554,6 +570,7 @@ local function refresh()
 	end
 
 	state.blessing_info = blessing_info
+	state.buff_names = blessing_info and blessing_info.buff_names or {}
 	state.blessings = setting("show_blessings", true) ~= false and (ok_blessings and blessings or {}) or {}
 
 	mod._weapon_dump = {

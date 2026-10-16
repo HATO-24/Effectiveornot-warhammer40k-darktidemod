@@ -130,13 +130,39 @@ function active_buffs.list(unit)
 	return out
 end
 
--- The one-line summary a text row can carry, e.g. "x3 4s  x1".
-function active_buffs.summary(entries, limit)
+-- The one-line summary a text row can carry, e.g. "Rending Shockwave x3 4s  x1".
+--
+-- `names` maps a buff template name to a localised name. Buff templates carry no
+-- display_name of their own (checked across all 2656 of them), so the caller
+-- supplies what it knows -- the wielded weapon's blessings, whose master items do
+-- list the buffs they apply. Anything still unnamed falls back to the template's own
+-- id with the underscores opened up, which is at least the game's own word for it.
+function active_buffs.display_name(entry, names)
+	local template_name = entry and entry.template_name
+
+	if type(template_name) ~= "string" then
+		return "?"
+	end
+
+	local named = type(names) == "table" and names[template_name] or nil
+
+	if type(named) == "string" and named ~= "" then
+		return named
+	end
+
+	return (string.gsub(template_name, "_", " "))
+end
+
+function active_buffs.summary(entries, limit, names)
 	local pieces = {}
 
 	for i = 1, math.min(#(entries or {}), limit or 4) do
 		local entry = entries[i]
-		local text = "x" .. tostring(entry.stacks)
+		local text = active_buffs.display_name(entry, names)
+
+		if (entry.stacks or 1) > 1 then
+			text = text .. " x" .. tostring(entry.stacks)
+		end
 
 		if entry.remaining then
 			text = text .. string.format(" %.0fs", entry.remaining)
@@ -145,7 +171,7 @@ function active_buffs.summary(entries, limit)
 		pieces[#pieces + 1] = text
 	end
 
-	return table.concat(pieces, "  ")
+	return table.concat(pieces, "  ·  ")
 end
 
 return active_buffs
