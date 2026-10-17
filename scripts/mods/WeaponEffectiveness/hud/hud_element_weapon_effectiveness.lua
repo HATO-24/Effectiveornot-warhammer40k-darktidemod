@@ -156,7 +156,7 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 	end
 
 	local state = mod.state
-	local player_buff_count = state and state.player_buffs and #state.player_buffs or 0
+	local player_buff_count = state and state.weapon_buffs and #state.weapon_buffs or 0
 	local has_target = state and state.visible
 
 	-- Weapon-side buffs are about what you are holding, not about what you are
@@ -257,7 +257,7 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 
 		-- The buff rows name what is running, with stacks and seconds left.
 		if row == PLAYER_BUFFS_ROW then
-			set_buff_row(self, row, state.player_buffs or {}, state.buff_names, localize(ATTACK_LOC[row]))
+			set_buff_row(self, row, state.weapon_buffs or {}, state.buff_names, localize(ATTACK_LOC[row]))
 		elseif row == ENEMY_BUFFS_ROW then
 			set_buff_row(self, row, state.target_buffs or {}, state.buff_names, localize(ATTACK_LOC[row]))
 		-- The live panel is its own row: read straight from the composed stats.
