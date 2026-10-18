@@ -1287,6 +1287,35 @@ mod:command("wepcheckstate", "Report what the indicator currently sees, and why 
 		))
 	end
 
+	-- The naming chain only works if the buff template names the engine reports are
+	-- the same strings the blessing data uses as keys. That is the assumption most
+	-- likely to be wrong, so both sides are printed side by side: what is running,
+	-- and what the map knows.
+	local running = state.player_buffs or {}
+	local running_names = {}
+
+	for index = 1, #running do
+		running_names[#running_names + 1] = tostring(running[index].template_name)
+	end
+
+	mod:echo("  running buffs: [" .. table.concat(running_names, ", ") .. "]")
+
+	local map_keys = {}
+	local map = state.buff_names or {}
+
+	for key in pairs(map) do
+		map_keys[#map_keys + 1] = key
+	end
+
+	table.sort(map_keys)
+
+	mod:echo("  blessing buff keys: [" .. table.concat(map_keys, ", ") .. "]")
+	mod:echo(string.format(
+		"  split: weapon=%d talent=%d",
+		#(state.weapon_buffs or {}),
+		#(state.talent_buffs or {})
+	))
+
 	-- The body-part resolution is the part most likely to fail silently, so it gets
 	-- its own line: which of the three routes won, what the engine's zone
 	-- vocabulary looks like, whether the hit actor can be named, and which override
