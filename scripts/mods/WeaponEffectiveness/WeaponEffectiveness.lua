@@ -1316,6 +1316,15 @@ mod:command("wepcheckstate", "Report what the indicator currently sees, and why 
 		#(state.talent_buffs or {})
 	))
 
+	-- Also to wepcheck.log, which survives the session: the console log rolls over
+	-- and these three lines are the ones that answer the naming question.
+	diagnostics.log("buffdiag running=[%s] map=[%s] weapon=%d talent=%d",
+		table.concat(running_names, ", "),
+		table.concat(map_keys, ", "),
+		#(state.weapon_buffs or {}),
+		#(state.talent_buffs or {})
+	)
+
 	-- The body-part resolution is the part most likely to fail silently, so it gets
 	-- its own line: which of the three routes won, what the engine's zone
 	-- vocabulary looks like, whether the hit actor can be named, and which override
