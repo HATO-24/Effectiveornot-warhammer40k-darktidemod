@@ -24,6 +24,9 @@ const ALLOWED = new Set([
 	'pcall', 'xpcall', 'error', 'assert', 'require', 'rawget', 'rawset',
 	'setmetatable', 'getmetatable', 'next', 'unpack', 'table', 'string', 'math',
 	'os', 'io', 'coroutine', 'debug', 'loadstring', 'collectgarbage', 'os.exit',
+	// Standard Lua. `package.loaded` is how the trait definition tables are found
+	// without hard-coding a settings path that moves between builds.
+	'package',
 	// game / framework
 	'CLASS', 'Managers', 'Mods', 'Unit', 'Actor', 'ScriptUnit', 'PhysicsWorld',
 	'HEALTH_ALIVE', 'ALIVE', 'Localize', 'Color', 'Vector3', 'Vector2',
