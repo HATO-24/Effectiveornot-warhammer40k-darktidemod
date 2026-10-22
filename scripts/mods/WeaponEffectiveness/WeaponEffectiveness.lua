@@ -43,6 +43,67 @@ if not ok_master_items or type(MasterItems) ~= "table" then
 	MasterItems = nil
 end
 
+-- Which buff templates a blessing applies.
+--
+-- A blessing's master item does NOT carry them: its fields are display_name, icon,
+-- trait, tags and friends, and the field list was dumped from the running game to
+-- establish that (see the buffdiag line in wepcheck.log). It points at the trait
+-- definition with `trait`, and THAT table is keyed by buff template name.
+--
+-- The trait definitions live in loaded modules with "weapon_trait" in their path.
+-- Scanning package.loaded for them is what DshProbe does too, and it avoids
+-- hard-coding a settings path that can move between builds.
+local trait_buff_cache = {}
+
+local function trait_matches(path)
+	return type(path) == "string" and string.find(path, "weapon_trait", 1, true) ~= nil
+end
+
+local function trait_buff_names(trait_name)
+	if type(trait_name) ~= "string" or trait_name == "" then
+		return nil
+	end
+
+	local cached = trait_buff_cache[trait_name]
+
+	if cached ~= nil then
+		return cached or nil
+	end
+
+	local found = nil
+	local loaded = type(package) == "table" and package.loaded or nil
+
+	if type(loaded) == "table" then
+		pcall(function ()
+			for path, module in pairs(loaded) do
+				if trait_matches(path) and type(module) == "table" then
+					local entry = module[trait_name]
+
+					if type(entry) == "table" and type(entry.buffs) == "table" then
+						local names = {}
+
+						for buff_name in pairs(entry.buffs) do
+							if type(buff_name) == "string" then
+								names[#names + 1] = buff_name
+							end
+						end
+
+						if #names > 0 then
+							found = names
+
+							return
+						end
+					end
+				end
+			end
+		end)
+	end
+
+	trait_buff_cache[trait_name] = found or false
+
+	return found
+end
+
 target_module.set_armor_module(armor)
 
 local HUD_ELEMENT_CLASS = "HudElementWeaponEffectiveness"
@@ -465,10 +526,12 @@ local function weapon_blessings(player, slot_name)
 
 					out[#out + 1] = { text = text }
 
-					-- A blessing's master item lists the buff templates it applies, which
-					-- is the only place a buff gets a human name: buff templates have no
-					-- display_name of their own (checked across all 2656 of them).
+					-- The buff templates this blessing applies, so a running buff can be
+					-- shown under the blessing's name. Two routes: the master item's own
+					-- `buffs` (this build does not use it) and, correctly, its `trait`
+					-- pointing at the trait definition table.
 					local buffs = type(master) == "table" and master.buffs or nil
+					local buff_names = trait_buff_names(type(master) == "table" and master.trait or nil)
 
 					if type(buffs) == "table" then
 						for buff_name in pairs(buffs) do
@@ -476,6 +539,14 @@ local function weapon_blessings(player, slot_name)
 								info.buff_names[buff_name] = text
 							end
 						end
+					end
+
+					if buff_names then
+						for index = 1, #buff_names do
+							info.buff_names[buff_names[index]] = text
+						end
+
+						info.buff_source_field = "trait"
 					end
 				else
 					info.unresolved_key = key
