@@ -431,6 +431,22 @@ local function weapon_blessings(player, slot_name)
 			local ok_item, master = pcall(MasterItems.get_item, trait.id)
 			local key = ok_item and type(master) == "table" and master.display_name or nil
 
+			-- What the master item actually carries, recorded once per lookup. The
+			-- naming chain assumed a `buffs` key table and got an empty map, so the
+			-- field list is logged instead of guessed at for a fourth time.
+			if ok_item and type(master) == "table" and info.master_fields == nil then
+				local fields = {}
+
+				for field, field_value in pairs(master) do
+					if type(field) == "string" then
+						fields[#fields + 1] = field .. ":" .. type(field_value)
+					end
+				end
+
+				table.sort(fields)
+				info.master_fields = table.concat(fields, " ")
+			end
+
 			-- The master item carries the localisation key. When it does not (a trait
 			-- this build does not have an item for), the game's own naming convention
 			-- is the fallback: the trait id minus its "weapon_trait_" prefix, under
@@ -1285,6 +1301,11 @@ mod:command("wepcheckstate", "Report what the indicator currently sees, and why 
 			table.concat(blessing.loadout_keys or {}, ", "),
 			table.concat(blessing.items_with_traits or {}, ", ")
 		))
+
+		-- What a blessing's master item actually contains. This is what decides how a
+		-- buff gets named, and it has been guessed wrong once already.
+		mod:echo("    master fields: " .. tostring(blessing.master_fields))
+		diagnostics.log("buffdiag master_fields=%s", tostring(blessing.master_fields))
 	end
 
 	-- The naming chain only works if the buff template names the engine reports are
