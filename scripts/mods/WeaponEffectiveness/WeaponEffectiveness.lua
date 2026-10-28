@@ -519,6 +519,16 @@ local function weapon_blessings(player, slot_name)
 			if type(key) == "string" then
 				local ok_text, text = pcall(Localize, key)
 
+				-- The whole chain for this trait, so a wrong name can be traced to the
+				-- step that produced it instead of guessed at.
+				info.trait_rows = info.trait_rows or {}
+				info.trait_rows[#info.trait_rows + 1] = string.format(
+					"%s | key=%s | text=%s",
+					tostring(trait.id),
+					tostring(key),
+					tostring(text)
+				)
+
 				-- An unresolved key comes back as the key itself; showing that would
 				-- just be noise, so it is skipped.
 				if ok_text and type(text) == "string" and text ~= "" and text ~= key then
@@ -1506,6 +1516,17 @@ mod:command("wepcheckstate", "Report what the indicator currently sees, and why 
 		-- buff gets named, and it has been guessed wrong once already.
 		mod:echo("    master fields: " .. tostring(blessing.master_fields))
 		diagnostics.log("buffdiag master_fields=%s", tostring(blessing.master_fields))
+
+		-- One line per equipped trait: which id, which localisation key, what text.
+		-- The blessing row showed a talent name once, so every step of that lookup is
+		-- recorded rather than just its result.
+		for row_index = 1, #(blessing.trait_rows or {}) do
+			diagnostics.log("buffdiag trait[%d] %s", row_index, blessing.trait_rows[row_index])
+
+			if mod.echo then
+				mod:echo("    trait: " .. blessing.trait_rows[row_index])
+			end
+		end
 	end
 
 	-- The naming chain only works if the buff template names the engine reports are
