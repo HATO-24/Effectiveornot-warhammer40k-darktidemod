@@ -190,16 +190,6 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 		end
 	end
 
-	if player_buff_count > 0 then
-		set_buff_row(
-			self,
-			PLAYER_BUFFS_ROW,
-			state.player_buffs,
-			state.buff_names,
-			localize(ATTACK_LOC[PLAYER_BUFFS_ROW])
-		)
-	end
-
 	if not has_target then
 		return
 	end
@@ -255,10 +245,8 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 		local row = ROWS[index]
 		local line = lines_by_kind[row]
 
-		-- The buff rows name what is running, with stacks and seconds left.
-		if row == PLAYER_BUFFS_ROW then
-			set_buff_row(self, row, state.weapon_buffs or {}, state.buff_names, localize(ATTACK_LOC[row]))
-		elseif row == ENEMY_BUFFS_ROW then
+		-- The enemy-side row stays; the player-side one was merged into the blessings row.
+		if row == ENEMY_BUFFS_ROW then
 			set_buff_row(self, row, state.target_buffs or {}, state.buff_names, localize(ATTACK_LOC[row]))
 		-- The live panel is its own row: read straight from the composed stats.
 		elseif row == STATS_ROW then
@@ -278,13 +266,27 @@ HudElementWeaponEffectiveness.update = function(self, dt, t, ui_renderer, render
 				set_row(self, row, localize(ATTACK_LOC[row]), table.concat(pieces, "  ·  "), mod.neutral_color(), true)
 			end
 		elseif row == BLESSINGS_ROW then
-			-- The weapon's equipped blessings, named by the game's own localisation.
+			-- The weapon's equipped blessings, named by the game's own localisation,
+			-- with a counter for the ones currently running. One row, not two: the
+			-- equipped list and the active list are the same list.
 			local pieces = {}
 
 			for blessing_index = 1, #(state.blessings or {}) do
 				local blessing = state.blessings[blessing_index]
+				local text = tostring(blessing.text)
+				local live = blessing.live
 
-				pieces[#pieces + 1] = tostring(blessing.text)
+				if live then
+					if (live.stacks or 1) > 1 then
+						text = text .. " x" .. tostring(live.stacks)
+					end
+
+					if live.remaining then
+						text = text .. string.format(" %.0fs", live.remaining)
+					end
+				end
+
+				pieces[#pieces + 1] = text
 			end
 
 			if #pieces > 0 then
@@ -425,3 +427,4 @@ HudElementWeaponEffectiveness.apply_colors = function(self)
 end
 
 return HudElementWeaponEffectiveness
+

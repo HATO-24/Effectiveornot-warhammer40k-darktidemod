@@ -797,6 +797,37 @@ local function refresh()
 	state.weapon_buffs = weapon_buffs
 	state.talent_buffs = talent_buffs
 
+	-- The blessings row carries its own live state instead of a second row repeating
+	-- the same names: "裝了什么" and "此刻生效" are the same list, so they are shown as
+	-- one. A blessing that is not running simply has no counter.
+	--
+	-- Only weapon-sourced buffs are matched, so a talent buff can never be mistaken
+	-- for a blessing -- that confusion is what the earlier weapon/talent split was
+	-- misread as.
+	local live_by_name = {}
+
+	for index = 1, #(weapon_buffs or {}) do
+		local entry = weapon_buffs[index]
+
+		if type(entry.display) == "string" then
+			live_by_name[entry.display] = entry
+		end
+	end
+
+	for index = 1, #(state.blessings or {}) do
+		local blessing = state.blessings[index]
+		local live = live_by_name[blessing.text]
+
+		blessing.live = live or nil
+	end
+
+	-- Ranged weapons have no attack rows yet, so the blessing row would be the only
+	-- thing on screen and read as a stray element. It shows only for melee until the
+	-- ranged readout exists.
+	if is_ranged then
+		state.blessings = {}
+	end
+
 	-- A compact snapshot of everything that had to go right for the indicator to
 	-- show something. /wepcheckstate prints this, so a single in-game test can
 	-- report *why* nothing appeared instead of just "nothing appeared".
