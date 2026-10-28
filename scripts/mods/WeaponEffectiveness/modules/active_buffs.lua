@@ -55,9 +55,11 @@ local function template_of(buff)
 	return ok and template or nil
 end
 
--- Every buff running on `unit` that the game would show, with the numbers needed to
--- draw it. Never raises: an unreadable buff extension yields an empty list.
-function active_buffs.list(unit)
+-- Every buff running on `unit`. By default only the ones the game's own bar would
+-- show; `include_all` also returns the rest, flagged `shown = false`, which is what
+-- the diagnostic needs to answer "is a blessing buff being filtered out?".
+-- Never raises: an unreadable buff extension yields an empty list.
+function active_buffs.list(unit, include_all)
 	local out = {}
 
 	if not unit then
@@ -78,8 +80,9 @@ function active_buffs.list(unit)
 
 	for _, buff in pairs(buffs) do
 		local template = template_of(buff)
+		local shown = shows_in_hud(template)
 
-		if shows_in_hud(template) then
+		if shown or include_all then
 			local duration = call_number(buff, "duration")
 			local progress = call_number(buff, "duration_progress")
 
@@ -107,6 +110,10 @@ function active_buffs.list(unit)
 				template_name = type(template.name) == "string" and template.name or nil,
 				icon = template.hud_icon,
 				related_talents = related,
+				-- Whether the game's own bar would draw it. A blessing whose buff is
+				-- hidden here would never reach the readout, so the diagnostic reports
+				-- every buff with this flag rather than only the survivors.
+				shown = shown,
 				-- visual_stack_count is what the native bar prints, so it is preferred
 				-- over the raw count.
 				stacks = call_number(buff, "visual_stack_count") or call_number(buff, "stack_count") or 1,

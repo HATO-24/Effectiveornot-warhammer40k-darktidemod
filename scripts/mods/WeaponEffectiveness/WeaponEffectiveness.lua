@@ -1417,6 +1417,31 @@ mod:command("wepcheckstate", "Report what the indicator currently sees, and why 
 		#(state.talent_buffs or {})
 	)
 
+	-- Every buff on the player, including the ones the game's bar hides. If a
+	-- blessing's buff is being filtered out, it shows up here marked (hidden) and
+	-- that is the whole answer.
+	local unit = local_player_unit()
+	local all_names = {}
+
+	if unit then
+		local ok_all, all_buffs = pcall(active_buffs.list, unit, true)
+
+		if ok_all then
+			for index = 1, #all_buffs do
+				local entry = all_buffs[index]
+
+				all_names[#all_names + 1] = tostring(entry.template_name)
+					.. (entry.shown and "" or "(hidden)")
+			end
+		end
+	end
+
+	if mod.echo then
+		mod:echo("  all buffs: [" .. table.concat(all_names, ", ") .. "]")
+	end
+
+	diagnostics.log("buffdiag all=[%s]", table.concat(all_names, ", "))
+
 	-- The body-part resolution is the part most likely to fail silently, so it gets
 	-- its own line: which of the three routes won, what the engine's zone
 	-- vocabulary looks like, whether the hit actor can be named, and which override
