@@ -730,21 +730,27 @@ local function refresh()
 	state.hit_zone_name = target_info.hit_zone_name
 	state.header = header_info(target_info.breed, state.target_name)
 
-	-- Active buffs, read the way the game's own bar reads them. Ours and theirs are
-	-- separate rows because they answer different questions: "what is running on me"
-	-- versus "what have I put on the thing I am aiming at".
-	local ok_player_buffs, player_buffs = pcall(active_buffs.list, player_unit)
-	local ok_target_buffs, target_buffs = pcall(active_buffs.list, target_info.unit)
+	-- Active buffs, read WITHOUT the hud_icon filter.
+	--
+	-- That filter mirrors the native buff bar, and it is right for "what does the
+	-- game itself put on screen" -- but it is wrong as a readout filter. A blessing's
+	-- debuff lands on the ENEMY, where nothing has a HUD icon, and a self-buff need
+	-- not have one either. Filtering by icon is why a blessing could be active with
+	-- the row still empty.
+	--
+	-- What gates display now is whether the buff can be NAMED (see buff_sources):
+	-- nameable ones are shown, the rest are dropped rather than printed as ids.
+	local ok_player_buffs, player_buffs = pcall(active_buffs.list, player_unit, true)
+	local ok_target_buffs, target_buffs = pcall(active_buffs.list, target_info.unit, true)
 
-	state.player_buffs = setting("show_player_buffs", true) ~= false and (ok_player_buffs and player_buffs or {}) or {}
-	state.target_buffs = setting("show_enemy_debuffs", true) ~= false and (ok_target_buffs and target_buffs or {}) or {}
+	local player_all = ok_player_buffs and player_buffs or {}
+	local target_all = ok_target_buffs and target_buffs or {}
 
-	-- Split the running buffs into the two things they belong to, named through the
-	-- three sources (weapon blessing -> curated table -> talent id rule). This is
-	-- what makes "is my blessing active right now" answerable at all.
+	-- Split by what granted each buff, on both sides: your blessings and talents can
+	-- put buffs on you AND debuffs on the thing you are aiming at.
 	local ok_split, weapon_buffs, talent_buffs = pcall(
 		buff_sources.split,
-		state.player_buffs,
+		player_all,
 		state.buff_names,
 		buff_talent_names
 	)
@@ -754,6 +760,40 @@ local function refresh()
 		weapon_buffs, talent_buffs = {}, {}
 	end
 
+	local ok_target_split, target_weapon, target_talent = pcall(
+		buff_sources.split,
+		target_all,
+		state.buff_names,
+		buff_talent_names
+	)
+
+	if not ok_target_split then
+		target_weapon, target_talent = {}, {}
+	end
+
+	-- One list per row for now; the element split comes next.
+	local player_shown = {}
+
+	for index = 1, #(weapon_buffs or {}) do
+		player_shown[#player_shown + 1] = weapon_buffs[index]
+	end
+
+	for index = 1, #(talent_buffs or {}) do
+		player_shown[#player_shown + 1] = talent_buffs[index]
+	end
+
+	local target_shown = {}
+
+	for index = 1, #(target_weapon or {}) do
+		target_shown[#target_shown + 1] = target_weapon[index]
+	end
+
+	for index = 1, #(target_talent or {}) do
+		target_shown[#target_shown + 1] = target_talent[index]
+	end
+
+	state.player_buffs = setting("show_player_buffs", true) ~= false and player_shown or {}
+	state.target_buffs = setting("show_enemy_debuffs", true) ~= false and target_shown or {}
 	state.weapon_buffs = weapon_buffs
 	state.talent_buffs = talent_buffs
 
