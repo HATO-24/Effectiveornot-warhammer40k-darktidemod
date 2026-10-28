@@ -104,6 +104,49 @@ local function trait_buff_names(trait_name)
 	return found
 end
 
+-- Which buff template a blessing's proc actually puts ON THE ENEMY.
+--
+-- A blessing like "鸣雷" is a proc buff that lives on the player and applies a
+-- debuff to whatever it hits. The two have different template names: the proc is
+-- weapon_trait_bespoke_..._targets_receive_rending_debuff, the thing that lands on
+-- the enemy is `rending_debuff`, named in the proc template's
+-- target_buff_data.internal_buff_name.
+--
+-- Without this map the enemy's debuffs are unnamed, and unnamed buffs are dropped --
+-- which is exactly why the "on target" row showed no stacks or time.
+local target_buff_cache = nil
+
+local function target_buff_names()
+	if target_buff_cache ~= nil then
+		return target_buff_cache or nil
+	end
+
+	local out = {}
+	local loaded = type(package) == "table" and package.loaded or nil
+
+	if type(loaded) == "table" then
+		pcall(function ()
+			for path, module in pairs(loaded) do
+				if trait_matches(path) and string.find(path, "buff_templates", 1, true) and type(module) == "table" then
+					for template_name, template in pairs(module) do
+						if type(template_name) == "string" and type(template) == "table" then
+							local target_data = template.target_buff_data
+
+							if type(target_data) == "table" and type(target_data.internal_buff_name) == "string" then
+								out[template_name] = target_data.internal_buff_name
+							end
+						end
+					end
+				end
+			end
+		end)
+	end
+
+	target_buff_cache = out
+
+	return next(out) and out or nil
+end
+
 target_module.set_armor_module(armor)
 
 local HUD_ELEMENT_CLASS = "HudElementWeaponEffectiveness"
@@ -552,8 +595,21 @@ local function weapon_blessings(player, slot_name)
 					end
 
 					if buff_names then
+						-- Also map the debuff each proc puts on the enemy, so the "on
+						-- target" row can name it and therefore show stacks and time.
+						local targets = target_buff_names()
+
 						for index = 1, #buff_names do
-							info.buff_names[buff_names[index]] = text
+							local buff_name = buff_names[index]
+
+							info.buff_names[buff_name] = text
+
+							local target_name = targets and targets[buff_name] or nil
+
+							if type(target_name) == "string" then
+								info.buff_names[target_name] = text
+								info.target_buff_count = (info.target_buff_count or 0) + 1
+							end
 						end
 
 						info.buff_source_field = "trait"
