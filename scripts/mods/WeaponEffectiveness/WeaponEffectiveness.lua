@@ -1266,6 +1266,64 @@ mod:command("wepcheck", "Dump the weapon/armour state this mod sees to a JSON fi
 	end
 end)
 
+-- Dumps the game's OWN already-loaded settings modules to JSON.
+--
+-- This is the practical half of "unpack the game": the scripts live inside ~100 GB
+-- of Stingray .stream bundles, but the ones that matter are already decoded in
+-- memory by the time a mod runs, and `package.loaded` hands them over as live
+-- tables. Same knowledge, current build, no 100 GB extraction and no tool that
+-- breaks on the next patch.
+mod:command("wepdumpmods", "Dump the game's loaded trait/buff/talent modules to out/", function ()
+	if not mod.echo then
+		return
+	end
+
+	local loaded = type(package) == "table" and package.loaded or nil
+
+	if type(loaded) ~= "table" then
+		mod:echo("WeaponEffectiveness: package.loaded is unavailable")
+
+		return
+	end
+
+	local wanted = { "weapon_trait", "buff_template", "archetype_talent", "talent_settings" }
+	local matches = {}
+
+	for path in pairs(loaded) do
+		if type(path) == "string" then
+			for index = 1, #wanted do
+				if string.find(path, wanted[index], 1, true) then
+					matches[#matches + 1] = path
+
+					break
+				end
+			end
+		end
+	end
+
+	table.sort(matches)
+
+	if #matches == 0 then
+		mod:echo("WeaponEffectiveness: no trait/buff/talent modules are loaded; equip the weapon first")
+
+		return
+	end
+
+	mod:echo(string.format("WeaponEffectiveness: dumping %d loaded modules", #matches))
+
+	for index = 1, #matches do
+		local path = matches[index]
+		local file_name = "game_" .. string.gsub(path, "[/\\.]", "_") .. ".json"
+		local written, bytes = diagnostics.write_json(file_name, loaded[path])
+
+		if written then
+			mod:echo(string.format("  %s (%d KB)", file_name, math.floor((bytes or 0) / 1024)))
+		else
+			mod:echo("  skipped " .. path .. " (too large or not encodable)")
+		end
+	end
+end)
+
 mod:command("wepcheckstate", "Report what the indicator currently sees, and why it is hidden", function ()
 	local state = mod.state
 

@@ -443,4 +443,32 @@ function diagnostics.out_file()
 	return OUT_FILE
 end
 
+-- Writes any value to a named file next to the dump, for the module dump below.
+-- Returns the path and the byte count, or nil when the write did not happen.
+function diagnostics.write_json(file_name, value)
+	if not io_handle or type(file_name) ~= "string" then
+		return nil
+	end
+
+	local ok, json = pcall(encode, value, 0, {})
+
+	if not ok or type(json) ~= "string" or #json < 3 then
+		return nil
+	end
+
+	local path = "./../mods/WeaponEffectiveness/out/" .. file_name
+	local file = io_handle.open(path, "w")
+
+	if not file then
+		return nil
+	end
+
+	file:write(json)
+	file:close()
+
+	diagnostics.log("wrote %s (%d bytes)", path, #json)
+
+	return path, #json
+end
+
 return diagnostics
